@@ -1,91 +1,151 @@
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
 
 const TEAM_COLORS = {
-  player: 0x7c3aed,
-  ai1: 0x22c55e,
-  ai2: 0xfacc15,
+  team1: 0x7c3aed, // Purple
+  team2: 0x22c55e, // Green
+  team3: 0xfacc15, // Yellow
 };
 
-function makeStudent(color) {
-  const geo = new THREE.CapsuleGeometry(0.25, 0.6, 6, 12);
+/**
+ * Create a simple cube unit
+ */
+function makeCubeUnit(color) {
+  const geo = new THREE.BoxGeometry(0.3, 0.3, 0.3);
   const mat = new THREE.MeshStandardMaterial({ color });
   const mesh = new THREE.Mesh(geo, mat);
   mesh.castShadow = true;
   mesh.receiveShadow = true;
-  const head = new THREE.Mesh(new THREE.SphereGeometry(0.22, 12, 12), new THREE.MeshStandardMaterial({ color: 0x202020 }));
-  head.position.y = 0.6;
-  mesh.add(head);
   return mesh;
 }
 
-function makeTeacher(color) {
-  const geo = new THREE.BoxGeometry(0.45, 0.9, 0.35);
+/**
+ * Create a simple triangle (3D tetrahedron) unit
+ */
+function makeTriangleUnit(color) {
+  const geo = new THREE.TetrahedronGeometry(0.2, 0);
   const mat = new THREE.MeshStandardMaterial({ color });
   const mesh = new THREE.Mesh(geo, mat);
   mesh.castShadow = true;
   mesh.receiveShadow = true;
-  const head = new THREE.Mesh(new THREE.SphereGeometry(0.24, 12, 12), new THREE.MeshStandardMaterial({ color: 0x1e1e1e }));
-  head.position.y = 0.6;
-  mesh.add(head);
   return mesh;
 }
 
-function makeRobot(color) {
-  const geo = new THREE.ConeGeometry(0.32, 0.9, 5);
-  const mat = new THREE.MeshStandardMaterial({ color, metalness: 0.3, roughness: 0.35 });
+/**
+ * Create a simple sphere unit
+ */
+function makeSphereUnit(color) {
+  const geo = new THREE.SphereGeometry(0.2, 12, 12);
+  const mat = new THREE.MeshStandardMaterial({ color });
   const mesh = new THREE.Mesh(geo, mat);
   mesh.castShadow = true;
   mesh.receiveShadow = true;
-  const head = new THREE.Mesh(new THREE.IcosahedronGeometry(0.22, 0), new THREE.MeshStandardMaterial({ color: 0x444444 }));
-  head.position.y = 0.55;
-  mesh.add(head);
   return mesh;
 }
 
-function placeUnits(terrain, startRow, startCol, count, teamId) {
+/**
+ * Create a simple cylinder unit
+ */
+function makeCylinderUnit(color) {
+  const geo = new THREE.CylinderGeometry(0.15, 0.15, 0.3, 12);
+  const mat = new THREE.MeshStandardMaterial({ color });
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  return mesh;
+}
+
+/**
+ * Get terrain height at a specific world position using raycasting
+ */
+function getTerrainHeightAt(scene, worldX, worldZ, cell) {
+  const raycaster = new THREE.Raycaster();
+  const rayOrigin = new THREE.Vector3(worldX, 100, worldZ); // Start high above
+  const rayDirection = new THREE.Vector3(0, -1, 0); // Cast downward
+  
+  raycaster.set(rayOrigin, rayDirection);
+  
+  // Find all terrain meshes
+  const terrainMeshes = [];
+  scene.traverse((object) => {
+    if (object.userData.isTerrain && object.isMesh) {
+      terrainMeshes.push(object);
+    }
+  });
+  
+  const intersects = raycaster.intersectObjects(terrainMeshes, false);
+  
+  if (intersects.length > 0) {
+    // Use the closest intersection (first one)
+    return intersects[0].point.y;
+  }
+  
+  // Fallback: calculate from cell height (height scale is 0.2)
+  const heightScale = 0.2;
+  return cell ? cell.getY() * heightScale : 0;
+}
+
+/**
+ * Create units for a team and place them on terrain vertex grids
+ */
+function createTeamUnits(scene, terrain, teamId, startRow, startCol, geometryType) {
   const units = [];
-  for (let i = 0; i < count; i++) {
-    const type = i % 3;
-    const color = TEAM_COLORS[teamId];
-    const mesh = type === 0 ? makeStudent(color) : type === 1 ? makeTeacher(color) : makeRobot(color);
-    
-    // Place units in a small area around the starting cell
-    const cellRow = startRow + Math.floor(i / 3);
-    const cellCol = startCol + (i % 3);
+  const color = TEAM_COLORS[teamId];
+  
+  // Map geometry type to creator function and properties
+  const geometryMap = {
+    'sphere': { create: makeSphereUnit, yOffset: 0.2, type: 'sphere' },
+    'cube': { create: makeCubeUnit, yOffset: 0.15, type: 'cube' },
+    'triangle': { create: makeTriangleUnit, yOffset: 0.1, type: 'triangle' },
+  };
+  
+  const geometry = geometryMap[geometryType];
+  if (!geometry) return units;
+  
+  // Place 3 units on different grid cells
+  const offsets = [
+    { row: 0, col: 0 },  // Starting cell
+    { row: 0, col: 1 },  // One cell right
+    { row: 1, col: 0 },  // One cell down
+  ];
+  
+  offsets.forEach((offset) => {
+    const cellRow = startRow + offset.row;
+    const cellCol = startCol + offset.col;
     const cell = terrain.getCell(cellRow, cellCol);
     
     if (cell) {
-      const center = cell.getCenter();
-      const spread = 0.3;
-      mesh.position.set(
-        center.x + (Math.random() - 0.5) * spread,
-        center.y + 0.2,
-        center.z + (Math.random() - 0.5) * spread
-      );
-    } else {
-      // Fallback to center of grid
-      mesh.position.set(0, 0.25, 0);
+      const unit = geometry.create(color);
+      
+      // Use raycasting to find exact terrain height at this position
+      const terrainHeight = getTerrainHeightAt(scene, cell.x, cell.z, cell);
+      
+      // Place unit on the terrain surface
+      unit.position.set(cell.x, terrainHeight + geometry.yOffset, cell.z);
+      
+      unit.userData = {
+        team: teamId,
+        cell: cell,
+        type: geometry.type,
+      };
+      
+      scene.add(unit);
+      units.push(unit);
     }
-    
-    mesh.userData = {
-      team: teamId,
-      hp: 100,
-      selected: false,
-      velocity: new THREE.Vector3(),
-      target: null,
-    };
-    units.push(mesh);
-  }
+  });
+  
   return units;
 }
 
+/**
+ * Spawn all teams on the terrain
+ * Team 1: sphere, Team 2: cube, Team 3: triangle
+ */
 export function spawnTeams(scene, terrain) {
   const teams = {
-    player: placeUnits(terrain, 2, 2, 5, 'player'),
-    ai1: placeUnits(terrain, 2, 13, 5, 'ai1'),
-    ai2: placeUnits(terrain, 13, 2, 5, 'ai2'),
+    team1: createTeamUnits(scene, terrain, 'team1', 2, 2, 'sphere'),      // Top-left: sphere
+    team2: createTeamUnits(scene, terrain, 'team2', 2, 13, 'cube'),     // Top-right: cube
+    team3: createTeamUnits(scene, terrain, 'team3', 13, 2, 'triangle'), // Bottom-left: triangle
   };
-  Object.values(teams).flat().forEach(u => scene.add(u));
+  
   return teams;
 }
-
