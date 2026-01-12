@@ -1,163 +1,174 @@
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
+import { GridCell } from './gridCell.js';
+import { TerrainGenerator } from './terrainGenerator.js';
 
 export function buildTerrain(scene) {
-  const platforms = [];
-  const ramps = [];
-
-  // Platform top material - green grass-like
-  const platformTopMat = new THREE.MeshStandardMaterial({ color: 0x4a7c59 });
-  platformTopMat.castShadow = true;
-  platformTopMat.receiveShadow = true;
-
-  // Platform side material - brown/darker earthy color
-  const platformSideMat = new THREE.MeshStandardMaterial({ color: 0x6b4e3d });
-  platformSideMat.castShadow = true;
-  platformSideMat.receiveShadow = true;
-
-  // Ramp material - brown wood-like
-  const rampMat = new THREE.MeshStandardMaterial({ color: 0x8b4513 });
-  rampMat.castShadow = true;
-  rampMat.receiveShadow = true;
-
-  // Define platform layout: 2x3 grid (6 platforms)
-  // Each platform: [x, z, width, depth, height]
-  const platformDefs = [
-    [-8, -6, 4, 4, 0],      // Bottom-left, ground level
-    [0, -6, 5, 4, 1.5],     // Bottom-center, elevated
-    [8, -6, 4, 4, 0.5],     // Bottom-right, slightly elevated
-    [-8, 6, 4, 5, 2.5],     // Top-left, highest
-    [0, 6, 5, 4, 1],        // Top-center, elevated
-    [8, 6, 4, 4, 0],        // Top-right, ground level
-  ];
-
-  // Create platforms
-  platformDefs.forEach(([x, z, width, depth, height], idx) => {
-    // Top surface - use plane for accurate positioning
-    const topGeo = new THREE.PlaneGeometry(width, depth);
-    const top = new THREE.Mesh(topGeo, platformTopMat.clone());
-    top.position.set(x, height, z);
-    top.rotation.x = -Math.PI / 2; // Rotate to be horizontal
-    top.castShadow = true;
-    top.receiveShadow = true;
-    scene.add(top);
-
-    // Side walls for visual depth (blocky diorama style with brown sides)
-    const sideHeight = height;
-    if (sideHeight > 0.1) {
-      // Front wall
-      const frontWall = new THREE.Mesh(
-        new THREE.BoxGeometry(width, sideHeight, 0.2),
-        platformSideMat.clone()
-      );
-      frontWall.position.set(x, height - sideHeight / 2 - 0.1, z - depth / 2);
-      frontWall.castShadow = true;
-      frontWall.receiveShadow = true;
-      scene.add(frontWall);
-
-      // Back wall
-      const backWall = new THREE.Mesh(
-        new THREE.BoxGeometry(width, sideHeight, 0.2),
-        platformSideMat.clone()
-      );
-      backWall.position.set(x, height - sideHeight / 2 - 0.1, z + depth / 2);
-      backWall.castShadow = true;
-      backWall.receiveShadow = true;
-      scene.add(backWall);
-
-      // Left wall
-      const leftWall = new THREE.Mesh(
-        new THREE.BoxGeometry(0.2, sideHeight, depth),
-        platformSideMat.clone()
-      );
-      leftWall.position.set(x - width / 2, height - sideHeight / 2 - 0.1, z);
-      leftWall.castShadow = true;
-      leftWall.receiveShadow = true;
-      scene.add(leftWall);
-
-      // Right wall
-      const rightWall = new THREE.Mesh(
-        new THREE.BoxGeometry(0.2, sideHeight, depth),
-        platformSideMat.clone()
-      );
-      rightWall.position.set(x + width / 2, height - sideHeight / 2 - 0.1, z);
-      rightWall.castShadow = true;
-      rightWall.receiveShadow = true;
-      scene.add(rightWall);
-    }
-
-    platforms.push({ top });
+  const GRID_SIZE = 16;
+  const CELL_SIZE = 1.0; // Each grid cell is 1 unit square
+  
+  // Generate terrain using Diamond-Square and Perlin Noise
+  const generator = new TerrainGenerator(GRID_SIZE, GRID_SIZE, CELL_SIZE, Date.now());
+  const map = generator.generate();
+  
+  const grid = [];
+  const gridMeshes = [];
+  
+  // Material for grid cells
+  const gridMaterial = new THREE.MeshStandardMaterial({ 
+    color: 0xffffff,
+    side: THREE.DoubleSide,
   });
-
-  // Define ramp connections (adjacent platforms in grid)
-  // Format: [platformA_index, platformB_index, connection_direction]
-  const rampConnections = [
-    [0, 1, 'right'],   // Bottom-left to bottom-center
-    [1, 2, 'right'],   // Bottom-center to bottom-right
-    [0, 3, 'up'],      // Bottom-left to top-left
-    [1, 4, 'up'],      // Bottom-center to top-center
-    [2, 5, 'up'],      // Bottom-right to top-right
-    [3, 4, 'right'],   // Top-left to top-center
-    [4, 5, 'right'],   // Top-center to top-right
-  ];
-
-  // Create stepped ramps (stair-like)
-  rampConnections.forEach(([aIdx, bIdx, dir]) => {
-    const platA = platforms[aIdx];
-    const platB = platforms[bIdx];
-    const posA = platA.top.position;
-    const posB = platB.top.position;
-
-    // Calculate direction vector from A to B
-    const direction = new THREE.Vector3().subVectors(posB, posA);
-    const horizontalDist = Math.sqrt(direction.x * direction.x + direction.z * direction.z);
-    const verticalDist = direction.y;
-
-    // Ramp dimensions
-    const rampWidth = 2.5; // Wide ramp
-    const stepHeight = 0.25; // Height of each step
-    const stepDepth = 0.7; // Depth of each step (horizontal distance per step)
-    
-    // Calculate number of steps needed
-    const numSteps = Math.max(2, Math.ceil(horizontalDist / stepDepth));
-    const actualStepDepth = horizontalDist / numSteps;
-    const stepVerticalIncrement = verticalDist / numSteps;
-
-    // Calculate the horizontal direction unit vector
-    const horizontalDir = new THREE.Vector3(direction.x, 0, direction.z).normalize();
-    const yRotation = Math.atan2(direction.x, direction.z);
-
-    // Create individual step boxes
-    const rampSteps = [];
-    for (let i = 0; i < numSteps; i++) {
-      const t = i / numSteps;
-      const nextT = (i + 1) / numSteps;
-      
-      // Calculate step center position along the ramp path
-      const stepCenterX = posA.x + direction.x * (t + nextT) / 2;
-      const stepCenterZ = posA.z + direction.z * (t + nextT) / 2;
-      // Step top surface should be at the interpolated height
-      const stepTopY = posA.y + direction.y * (t + nextT) / 2;
-      
-      // Create step box
-      const stepGeo = new THREE.BoxGeometry(rampWidth, stepHeight, actualStepDepth);
-      const step = new THREE.Mesh(stepGeo, rampMat.clone());
-      // Position step so its top surface is at stepTopY
-      step.position.set(stepCenterX, stepTopY + stepHeight / 2, stepCenterZ);
-      step.rotation.y = yRotation;
-      step.castShadow = true;
-      step.receiveShadow = true;
-      scene.add(step);
-      rampSteps.push(step);
-    }
-
-    // For pathfinding, create a dummy mesh at midpoint for reference
-    // The actual steps are already positioned correctly
-    const rampMidpoint = new THREE.Vector3().addVectors(posA, posB).multiplyScalar(0.5);
-    const rampMesh = rampSteps[Math.floor(rampSteps.length / 2)]; // Use middle step as reference
-    
-    ramps.push({ a: aIdx, b: bIdx, mesh: rampMesh, steps: rampSteps });
+  gridMaterial.castShadow = true;
+  gridMaterial.receiveShadow = true;
+  
+  // Black material for grid lines
+  const blackMaterial = new THREE.MeshBasicMaterial({ 
+    color: 0x000000,
+    side: THREE.DoubleSide,
   });
-
-  return { platforms, ramps };
+  
+  // Create individual grid meshes (quads connecting neighboring cells)
+  for (let z = 0; z < GRID_SIZE - 1; z++) {
+    for (let x = 0; x < GRID_SIZE - 1; x++) {
+      createGridMesh(scene, map, x, z, gridMaterial, blackMaterial, CELL_SIZE, GRID_SIZE);
+    }
+  }
+  
+  // Flatten map array for compatibility (row-major order: row * GRID_SIZE + col)
+  for (let z = 0; z < GRID_SIZE; z++) {
+    for (let x = 0; x < GRID_SIZE; x++) {
+      const cell = map[x][z];
+      grid.push(cell);
+      if (cell.mesh) {
+        gridMeshes.push(cell.mesh);
+      }
+    }
+  }
+  
+  // Helper function to get cell at grid coordinates
+  // Note: In our system, map[x][z] where x=col, z=row
+  function getCell(row, col) {
+    if (row < 0 || row >= GRID_SIZE || col < 0 || col >= GRID_SIZE) return null;
+    // map is indexed as [x][z], so map[col][row]
+    if (map[col] && map[col][row]) {
+      return map[col][row];
+    }
+    return null;
+  }
+  
+  // Helper function to get cell from world position
+  function getCellFromWorldPos(worldX, worldZ) {
+    const col = Math.floor((worldX + (GRID_SIZE * CELL_SIZE) / 2) / CELL_SIZE);
+    const row = Math.floor((worldZ + (GRID_SIZE * CELL_SIZE) / 2) / CELL_SIZE);
+    return getCell(row, col);
+  }
+  
+  return {
+    grid,
+    gridMeshes,
+    GRID_SIZE,
+    CELL_SIZE,
+    getCell,
+    getCellFromWorldPos,
+    generator, // Expose generator for access to moisture/temperature maps
+  };
 }
 
+/**
+ * Create a quad mesh for a grid cell, connecting it with neighbors
+ */
+function createGridMesh(scene, map, x, z, material, lineMaterial, cellSize, gridSize) {
+  const cell = map[x][z];
+  
+  // Get neighboring cells
+  const cellRight = map[x + 1] ? map[x + 1][z] : null;
+  const cellTop = map[x][z + 1] ? map[x][z + 1] : null;
+  const cellTopRight = map[x + 1] && map[x + 1][z + 1] ? map[x + 1][z + 1] : null;
+  
+  // Calculate world positions for quad corners
+  const worldX = (x - gridSize / 2) * cellSize + cellSize / 2;
+  const worldZ = (z - gridSize / 2) * cellSize + cellSize / 2;
+  
+  // Height scale factor (make terrain variation more visible)
+  const heightScale = 0.2;
+  
+  // Use the actual cell heights for each corner (shared corners will naturally match)
+  const bottomLeft = new THREE.Vector3(
+    worldX - cellSize / 2,
+    cell.getY() * heightScale,
+    worldZ - cellSize / 2
+  );
+  
+  const bottomRight = new THREE.Vector3(
+    worldX + cellSize / 2,
+    cellRight ? cellRight.getY() * heightScale : cell.getY() * heightScale,
+    worldZ - cellSize / 2
+  );
+  
+  const topLeft = new THREE.Vector3(
+    worldX - cellSize / 2,
+    cellTop ? cellTop.getY() * heightScale : cell.getY() * heightScale,
+    worldZ + cellSize / 2
+  );
+  
+  const topRight = new THREE.Vector3(
+    worldX + cellSize / 2,
+    cellTopRight ? cellTopRight.getY() * heightScale : cell.getY() * heightScale,
+    worldZ + cellSize / 2
+  );
+  
+  // Create mesh geometry
+  const geometry = new THREE.BufferGeometry();
+  const vertices = new Float32Array([
+    bottomLeft.x, bottomLeft.y, bottomLeft.z,
+    topLeft.x, topLeft.y, topLeft.z,
+    topRight.x, topRight.y, topRight.z,
+    bottomRight.x, bottomRight.y, bottomRight.z,
+  ]);
+  
+  const indices = [
+    0, 1, 2,
+    2, 3, 0,
+  ];
+  
+  const uvs = new Float32Array([
+    0, 0,
+    0, 1,
+    1, 1,
+    1, 0,
+  ]);
+  
+  geometry.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
+  geometry.setIndex(indices);
+  geometry.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
+  geometry.computeVertexNormals();
+  
+  // Create mesh with cell's color
+  const cellMaterial = material.clone();
+  cellMaterial.color.setHex(cell.color);
+  
+  const mesh = new THREE.Mesh(geometry, cellMaterial);
+  mesh.userData.cell = cell;
+  mesh.userData.isTerrain = true;
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  scene.add(mesh);
+  
+  // Store mesh reference in cell
+  cell.mesh = mesh;
+  
+  // Create black border lines (only on right and top edges to avoid duplicates)
+  const lineGeometry = new THREE.BufferGeometry();
+  const lineVertices = new Float32Array([
+    bottomRight.x, bottomRight.y + 0.01, bottomRight.z,
+    topRight.x, topRight.y + 0.01, topRight.z,
+    topLeft.x, topLeft.y + 0.01, topLeft.z,
+  ]);
+  
+  lineGeometry.setAttribute('position', new THREE.BufferAttribute(lineVertices, 3));
+  
+  const line = new THREE.Line(lineGeometry, lineMaterial);
+  line.userData.isTerrain = true;
+  line.renderOrder = 1000; // Draw on top
+  scene.add(line);
+}

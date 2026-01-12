@@ -1,106 +1,121 @@
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
 
-// Multi-level pathfinding using a simple platform graph built from ramps.
+// Grid-based pathfinding using A* algorithm
 export function computePath({ start, target, terrain }) {
-  const platforms = terrain.platforms || [];
-  const ramps = terrain.ramps || [];
-
-  const findPlatformIndex = pos => {
-    let best = { idx: -1, dist: Infinity };
-    platforms.forEach((p, i) => {
-      const d = p.top.position.distanceTo(pos);
-      if (d < best.dist) best = { idx: i, dist: d };
-    });
-    return best.idx;
-  };
-
-  const startPlat = findPlatformIndex(start);
-  const endPlat = findPlatformIndex(target);
-
-  if (startPlat === -1 || endPlat === -1) {
+  const grid = terrain.grid || [];
+  const GRID_SIZE = terrain.GRID_SIZE || 16;
+  
+  // Get grid cells for start and target positions
+  const startCell = terrain.getCellFromWorldPos(start.x, start.z);
+  const targetCell = terrain.getCellFromWorldPos(target.x, target.z);
+  
+  if (!startCell || !targetCell) {
     return [target.clone()];
   }
-
-  if (startPlat === endPlat) {
+  
+  if (startCell === targetCell) {
     const t = target.clone();
-    t.y = platforms[endPlat].top.position.y + 0.1;
+    t.y = startCell.y + 0.1;
     return [t];
   }
-
-  // Build adjacency from ramps
-  const adj = new Map();
-  platforms.forEach((_, i) => adj.set(i, []));
-  ramps.forEach((r, idx) => {
-    adj.get(r.a).push({ to: r.b, rampIndex: idx });
-    adj.get(r.b).push({ to: r.a, rampIndex: idx });
-  });
-
-  // BFS to find platform path
-  const queue = [startPlat];
-  const prev = new Map([[startPlat, { p: -1, ramp: -1 }]]);
-  while (queue.length) {
-    const cur = queue.shift();
-    if (cur === endPlat) break;
-    for (const edge of adj.get(cur)) {
-      if (!prev.has(edge.to)) {
-        prev.set(edge.to, { p: cur, ramp: edge.rampIndex });
-        queue.push(edge.to);
+  
+  // A* pathfinding
+  const openSet = [startCell];
+  const closedSet = new Set();
+  const cameFrom = new Map();
+  const gScore = new Map();
+  const fScore = new Map();
+  
+  gScore.set(startCell, 0);
+  fScore.set(startCell, heuristic(startCell, targetCell));
+  
+  function heuristic(a, b) {
+    return Math.abs(a.row - b.row) + Math.abs(a.col - b.col);
+  }
+  
+  function getNeighbors(cell) {
+    const neighbors = [];
+    const directions = [
+      { row: -1, col: 0 }, // up
+      { row: 1, col: 0 },  // down
+      { row: 0, col: -1 }, // left
+      { row: 0, col: 1 },  // right
+      { row: -1, col: -1 }, // diagonal
+      { row: -1, col: 1 },
+      { row: 1, col: -1 },
+      { row: 1, col: 1 },
+    ];
+    
+    directions.forEach(dir => {
+      const neighbor = terrain.getCell(cell.row + dir.row, cell.col + dir.col);
+      if (neighbor && neighbor.walkable && !closedSet.has(neighbor)) {
+        neighbors.push(neighbor);
+      }
+    });
+    
+    return neighbors;
+  }
+  
+  while (openSet.length > 0) {
+    // Find cell with lowest fScore
+    let current = openSet[0];
+    let currentIdx = 0;
+    for (let i = 1; i < openSet.length; i++) {
+      const f = fScore.get(openSet[i]) ?? Infinity;
+      const currentF = fScore.get(current) ?? Infinity;
+      if (f < currentF) {
+        current = openSet[i];
+        currentIdx = i;
       }
     }
-  }
-
-  if (!prev.has(endPlat)) {
-    // No path; fallback straight line
-    return [target.clone()];
-  }
-
-  // Reconstruct platform sequence and ramps
-  const rampSequence = [];
-  let cur = endPlat;
-  while (cur !== startPlat) {
-    const info = prev.get(cur);
-    rampSequence.push(info.ramp);
-    cur = info.p;
-  }
-  rampSequence.reverse();
-
-  const waypoints = [];
-  
-  // Track current platform for ramp waypoint generation
-  let currentPlatIdx = startPlat;
-  
-  rampSequence.forEach(rampIdx => {
-    const ramp = ramps[rampIdx];
-    const platA = platforms[ramp.a];
-    const platB = platforms[ramp.b];
     
-    // Determine which platform is the start based on current path
-    const startPlatform = (currentPlatIdx === ramp.a) ? platA : platB;
-    const endPlatform = (currentPlatIdx === ramp.a) ? platB : platA;
-    
-    const startPos = startPlatform.top.position.clone();
-    const endPos = endPlatform.top.position.clone();
-    
-    // Generate waypoints along the ramp surface
-    // Create 4-5 waypoints distributed along the ramp
-    const numWaypoints = Math.max(4, Math.ceil((startPos.distanceTo(endPos)) / 2));
-    
-    for (let i = 0; i <= numWaypoints; i++) {
-      const t = i / numWaypoints;
-      const waypoint = new THREE.Vector3().lerpVectors(startPos, endPos, t);
-      // Interpolate height linearly along the ramp
-      waypoint.y = startPos.y + (endPos.y - startPos.y) * t;
-      waypoints.push(waypoint);
+    if (current === targetCell) {
+      // Reconstruct path
+      const path = [];
+      let node = targetCell;
+      while (node) {
+        path.unshift(node);
+        node = cameFrom.get(node);
+      }
+      
+      // Convert grid cells to waypoints
+      const waypoints = path.map(cell => {
+        const pos = cell.getCenter();
+        return new THREE.Vector3(pos.x, pos.y, pos.z);
+      });
+      
+      // Add final target position
+      const finalTarget = target.clone();
+      finalTarget.y = targetCell.y + 0.1;
+      waypoints.push(finalTarget);
+      
+      return waypoints;
     }
     
-    // Update current platform
-    currentPlatIdx = (currentPlatIdx === ramp.a) ? ramp.b : ramp.a;
-  });
-
-  const finalTarget = target.clone();
-  finalTarget.y = platforms[endPlat].top.position.y + 0.1;
-  waypoints.push(finalTarget);
-  return waypoints;
+    openSet.splice(currentIdx, 1);
+    closedSet.add(current);
+    
+    const neighbors = getNeighbors(current);
+    neighbors.forEach(neighbor => {
+      if (closedSet.has(neighbor)) return;
+      
+      const tentativeG = (gScore.get(current) ?? Infinity) + 1;
+      const neighborG = gScore.get(neighbor) ?? Infinity;
+      
+      if (!openSet.includes(neighbor)) {
+        openSet.push(neighbor);
+      } else if (tentativeG >= neighborG) {
+        return;
+      }
+      
+      cameFrom.set(neighbor, current);
+      gScore.set(neighbor, tentativeG);
+      fScore.set(neighbor, tentativeG + heuristic(neighbor, targetCell));
+    });
+  }
+  
+  // No path found, return direct target
+  return [target.clone()];
 }
 
 export function stepAlongPath(unit, dt, path, speed = 2.5) {

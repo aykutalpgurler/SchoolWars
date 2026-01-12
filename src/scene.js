@@ -6,12 +6,12 @@ export function buildSceneContent(scene) {
   // Soft fog for depth
   scene.fog = new THREE.Fog(0x87b9ff, 35, 120);
 
-  // Terrain platforms and ramps
+  // Terrain grid
   const terrain = buildTerrain(scene);
 
-  // Zone tiles on selected platforms
+  // Zone tiles on selected grid cells
   const zones = [];
-  const tileGeo = new THREE.BoxGeometry(1.5, 0.05, 1.5);
+  const tileGeo = new THREE.BoxGeometry(0.8, 0.05, 0.8);
   const heartMaterials = {
     neutral: new THREE.MeshStandardMaterial({ color: 0xffffff }),
     player: new THREE.MeshStandardMaterial({ color: 0x7c3aed }),
@@ -19,29 +19,34 @@ export function buildSceneContent(scene) {
     ai2: new THREE.MeshStandardMaterial({ color: 0xfacc15 }),
   };
 
-  const placements = [
-    { platform: 0, offset: new THREE.Vector3(0, 0.15, 0) },
-    { platform: 1, offset: new THREE.Vector3(-1, 0.15, -1) },
-    { platform: 1, offset: new THREE.Vector3(1.6, 0.15, 1.2) },
-    { platform: 2, offset: new THREE.Vector3(0, 0.15, 0) },
-    { platform: 3, offset: new THREE.Vector3(0, 0.15, 0) },
+  // Place zones on specific grid cells (row, col)
+  const zonePlacements = [
+    { row: 4, col: 4 },
+    { row: 4, col: 11 },
+    { row: 11, col: 4 },
+    { row: 11, col: 11 },
+    { row: 7, col: 7 },
   ];
 
-  placements.forEach((place, idx) => {
-    const plat = terrain.platforms[place.platform];
+  zonePlacements.forEach((place, idx) => {
+    const cell = terrain.getCell(place.row, place.col);
+    if (!cell) return;
+    
     const tile = new THREE.Mesh(tileGeo, heartMaterials.neutral.clone());
-    tile.position.copy(plat.top.position).add(place.offset);
+    const center = cell.getCenter();
+    tile.position.set(center.x, center.y, center.z);
     tile.receiveShadow = true;
     tile.userData = {
       id: `zone-${idx}`,
       owner: null,
       capture: 0,
+      cell: cell,
     };
     scene.add(tile);
     zones.push(tile);
   });
 
-  const teams = spawnTeams(scene, terrain.platforms);
+  const teams = spawnTeams(scene, terrain);
 
   const nameArea = buildNameArea(scene);
 

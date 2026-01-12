@@ -42,18 +42,31 @@ function makeRobot(color) {
   return mesh;
 }
 
-function placeUnits(platform, count, teamId) {
+function placeUnits(terrain, startRow, startCol, count, teamId) {
   const units = [];
   for (let i = 0; i < count; i++) {
     const type = i % 3;
     const color = TEAM_COLORS[teamId];
     const mesh = type === 0 ? makeStudent(color) : type === 1 ? makeTeacher(color) : makeRobot(color);
-    const spread = 0.6;
-    mesh.position.set(
-      platform.top.position.x + (Math.random() - 0.5) * spread,
-      platform.top.position.y + 0.25,
-      platform.top.position.z + (Math.random() - 0.5) * spread
-    );
+    
+    // Place units in a small area around the starting cell
+    const cellRow = startRow + Math.floor(i / 3);
+    const cellCol = startCol + (i % 3);
+    const cell = terrain.getCell(cellRow, cellCol);
+    
+    if (cell) {
+      const center = cell.getCenter();
+      const spread = 0.3;
+      mesh.position.set(
+        center.x + (Math.random() - 0.5) * spread,
+        center.y + 0.2,
+        center.z + (Math.random() - 0.5) * spread
+      );
+    } else {
+      // Fallback to center of grid
+      mesh.position.set(0, 0.25, 0);
+    }
+    
     mesh.userData = {
       team: teamId,
       hp: 100,
@@ -66,11 +79,11 @@ function placeUnits(platform, count, teamId) {
   return units;
 }
 
-export function spawnTeams(scene, platforms) {
+export function spawnTeams(scene, terrain) {
   const teams = {
-    player: placeUnits(platforms[0], 5, 'player'),
-    ai1: placeUnits(platforms[1], 5, 'ai1'),
-    ai2: placeUnits(platforms[2], 5, 'ai2'),
+    player: placeUnits(terrain, 2, 2, 5, 'player'),
+    ai1: placeUnits(terrain, 2, 13, 5, 'ai1'),
+    ai2: placeUnits(terrain, 13, 2, 5, 'ai2'),
   };
   Object.values(teams).flat().forEach(u => scene.add(u));
   return teams;

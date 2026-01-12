@@ -105,6 +105,9 @@ export function createUI(game, { scene, directional, spotlight, spotlightTarget,
   function applyShaderToScene(material) {
     if (!scene || !material) return;
     scene.traverse(obj => {
+      // Skip terrain objects
+      if (obj.userData?.isTerrain) return;
+      
       if (obj.isMesh && obj.material && (obj.material.isMeshStandardMaterial || obj.material.isMeshPhongMaterial || obj.material.isMeshToonMaterial || obj.material.isShaderMaterial || obj.material.isRawShaderMaterial)) {
         const mat = cloneForMesh(obj, material);
         obj.material = mat;
@@ -152,31 +155,33 @@ export function createUI(game, { scene, directional, spotlight, spotlightTarget,
   return { update, toggleShader, currentShaderName };
 
   function drawMinimap() {
-    if (!terrain?.platforms) return;
+    if (!terrain?.grid) return;
     mctx.clearRect(0, 0, minimap.width, minimap.height);
     mctx.fillStyle = 'rgba(0,0,0,0.55)';
     mctx.fillRect(0, 0, minimap.width, minimap.height);
 
-    const bounds = terrain.platforms.reduce(
-      (acc, p) => {
-        acc.minX = Math.min(acc.minX, p.top.position.x - p.width / 2);
-        acc.maxX = Math.max(acc.maxX, p.top.position.x + p.width / 2);
-        acc.minZ = Math.min(acc.minZ, p.top.position.z - p.length / 2);
-        acc.maxZ = Math.max(acc.maxZ, p.top.position.z + p.length / 2);
-        return acc;
-      },
-      { minX: Infinity, maxX: -Infinity, minZ: Infinity, maxZ: -Infinity }
-    );
+    // Calculate bounds from grid
+    const GRID_SIZE = terrain.GRID_SIZE || 16;
+    const CELL_SIZE = terrain.CELL_SIZE || 1.0;
+    const halfSize = (GRID_SIZE * CELL_SIZE) / 2;
+    const bounds = {
+      minX: -halfSize,
+      maxX: halfSize,
+      minZ: -halfSize,
+      maxZ: halfSize,
+    };
+    
     const pad = 12;
     const scaleX = (minimap.width - pad * 2) / (bounds.maxX - bounds.minX + 0.0001);
     const scaleZ = (minimap.height - pad * 2) / (bounds.maxZ - bounds.minZ + 0.0001);
 
-    // Platforms
-    terrain.platforms.forEach(p => {
-      const x = pad + (p.top.position.x - bounds.minX) * scaleX;
-      const z = pad + (p.top.position.z - bounds.minZ) * scaleZ;
-      mctx.fillStyle = '#2d864d';
-      mctx.fillRect(x - (p.width * scaleX) / 2, z - (p.length * scaleZ) / 2, p.width * scaleX, p.length * scaleZ);
+    // Draw grid cells
+    terrain.grid.forEach(cell => {
+      const x = pad + (cell.x - bounds.minX) * scaleX;
+      const z = pad + (cell.z - bounds.minZ) * scaleZ;
+      mctx.fillStyle = cell.walkable ? '#2d864d' : '#666666';
+      const cellSize = CELL_SIZE * scaleX;
+      mctx.fillRect(x - cellSize / 2, z - cellSize / 2, cellSize, cellSize);
     });
 
     // Units

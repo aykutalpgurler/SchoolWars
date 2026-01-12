@@ -23,7 +23,7 @@ export function setupInput({ renderer, camera, scene, terrain, cameraController,
   function pickGround(event) {
     updatePointer(event);
     raycaster.setFromCamera(pointer, camera);
-    const intersects = raycaster.intersectObjects(terrain.platforms.map(p => p.top), false);
+    const intersects = raycaster.intersectObjects(terrain.gridMeshes, false);
     if (intersects.length > 0) return intersects[0].point;
     return null;
   }
