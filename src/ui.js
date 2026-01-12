@@ -152,32 +152,70 @@ export function createUI(game, { scene, directional, spotlight, spotlightTarget,
   return { update, toggleShader, currentShaderName };
 
   function drawMinimap() {
-    if (!terrain?.platforms) return;
     mctx.clearRect(0, 0, minimap.width, minimap.height);
     mctx.fillStyle = 'rgba(0,0,0,0.55)';
     mctx.fillRect(0, 0, minimap.width, minimap.height);
 
-    const bounds = terrain.platforms.reduce(
-      (acc, p) => {
-        acc.minX = Math.min(acc.minX, p.top.position.x - p.width / 2);
-        acc.maxX = Math.max(acc.maxX, p.top.position.x + p.width / 2);
-        acc.minZ = Math.min(acc.minZ, p.top.position.z - p.length / 2);
-        acc.maxZ = Math.max(acc.maxZ, p.top.position.z + p.length / 2);
-        return acc;
-      },
-      { minX: Infinity, maxX: -Infinity, minZ: Infinity, maxZ: -Infinity }
-    );
+    if (!terrain) return;
+
+    // Calculate bounds from terrain grid
+    let bounds = { minX: Infinity, maxX: -Infinity, minZ: Infinity, maxZ: -Infinity };
+    
+    if (terrain.data && terrain.gridToWorld) {
+      // New terrain API: calculate bounds from grid
+      const tileSize = 4.0; // Should match CONFIG.tileSize
+      const width = terrain.data.walkable.length;
+      const depth = terrain.data.walkable[0].length;
+      bounds.minX = -width * tileSize / 2;
+      bounds.maxX = width * tileSize / 2;
+      bounds.minZ = -depth * tileSize / 2;
+      bounds.maxZ = depth * tileSize / 2;
+    } else if (terrain.platforms && terrain.platforms.length > 0) {
+      // Old terrain API fallback
+      bounds = terrain.platforms.reduce(
+        (acc, p) => {
+          acc.minX = Math.min(acc.minX, p.top.position.x - (p.size?.width || 4) / 2);
+          acc.maxX = Math.max(acc.maxX, p.top.position.x + (p.size?.width || 4) / 2);
+          acc.minZ = Math.min(acc.minZ, p.top.position.z - (p.size?.length || 4) / 2);
+          acc.maxZ = Math.max(acc.maxZ, p.top.position.z + (p.size?.length || 4) / 2);
+          return acc;
+        },
+        { minX: Infinity, maxX: -Infinity, minZ: Infinity, maxZ: -Infinity }
+      );
+    } else {
+      return;
+    }
+
     const pad = 12;
     const scaleX = (minimap.width - pad * 2) / (bounds.maxX - bounds.minX + 0.0001);
     const scaleZ = (minimap.height - pad * 2) / (bounds.maxZ - bounds.minZ + 0.0001);
 
-    // Platforms
-    terrain.platforms.forEach(p => {
-      const x = pad + (p.top.position.x - bounds.minX) * scaleX;
-      const z = pad + (p.top.position.z - bounds.minZ) * scaleZ;
-      mctx.fillStyle = '#2d864d';
-      mctx.fillRect(x - (p.width * scaleX) / 2, z - (p.length * scaleZ) / 2, p.width * scaleX, p.length * scaleZ);
-    });
+    // Draw terrain tiles
+    if (terrain.data && terrain.data.walkable) {
+      const { walkable, height } = terrain.data;
+      for (let x = 0; x < walkable.length; x++) {
+        for (let z = 0; z < walkable[0].length; z++) {
+          if (walkable[x][z]) {
+            const world = terrain.gridToWorld(x, z);
+            const mapX = pad + (world.x - bounds.minX) * scaleX;
+            const mapZ = pad + (world.z - bounds.minZ) * scaleZ;
+            const h = height[x][z];
+            // Color by height level
+            const colors = ['#2d864d', '#3d9e5d', '#4db86d', '#5dd27d'];
+            mctx.fillStyle = colors[Math.min(h, colors.length - 1)] || '#2d864d';
+            mctx.fillRect(mapX - 2, mapZ - 2, 4, 4);
+          }
+        }
+      }
+    } else if (terrain.platforms) {
+      // Fallback: draw platforms
+      terrain.platforms.forEach(p => {
+        const x = pad + (p.top.position.x - bounds.minX) * scaleX;
+        const z = pad + (p.top.position.z - bounds.minZ) * scaleZ;
+        mctx.fillStyle = '#2d864d';
+        mctx.fillRect(x - 4, z - 4, 8, 8);
+      });
+    }
 
     // Units
     const drawUnits = (teamId, color) => {

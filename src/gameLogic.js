@@ -30,12 +30,19 @@ export class GameLogic {
   }
 
   update(dt) {
-    // Move units along paths
+    // Move units along paths and snap to ground
     Object.values(this.teams).flat().forEach(unit => {
       const path = this.unitPaths.get(unit.uuid);
       if (path && path.length > 0) {
         const done = stepAlongPath(unit, dt, path);
         if (done) this.unitPaths.delete(unit.uuid);
+      } else {
+        // Snap to ground if not moving
+        if (this.terrain && this.terrain.getGroundHeight) {
+          const groundY = this.terrain.getGroundHeight(unit.position.x, unit.position.z);
+          const unitHeight = 0.3; // Approximate unit height offset
+          unit.position.y = Math.max(unit.position.y, groundY + unitHeight);
+        }
       }
     });
 

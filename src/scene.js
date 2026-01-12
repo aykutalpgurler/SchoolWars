@@ -6,10 +6,10 @@ export function buildSceneContent(scene) {
   // Soft fog for depth
   scene.fog = new THREE.Fog(0x87b9ff, 35, 120);
 
-  // Terrain platforms and ramps
+  // Terrain (will get shader material later from UI)
   const terrain = buildTerrain(scene);
 
-  // Zone tiles on selected platforms
+  // Zone tiles on terrain zone tiles
   const zones = [];
   const tileGeo = new THREE.BoxGeometry(1.5, 0.05, 1.5);
   const heartMaterials = {
@@ -19,29 +19,71 @@ export function buildSceneContent(scene) {
     ai2: new THREE.MeshStandardMaterial({ color: 0xfacc15 }),
   };
 
-  const placements = [
-    { platform: 0, offset: new THREE.Vector3(0, 0.15, 0) },
-    { platform: 1, offset: new THREE.Vector3(-1, 0.15, -1) },
-    { platform: 1, offset: new THREE.Vector3(1.6, 0.15, 1.2) },
-    { platform: 2, offset: new THREE.Vector3(0, 0.15, 0) },
-    { platform: 3, offset: new THREE.Vector3(0, 0.15, 0) },
-  ];
+  // Use zone tiles from terrain data
+  if (terrain.data && terrain.data.zoneTiles) {
+    terrain.data.zoneTiles.forEach((zt, idx) => {
+      const world = terrain.gridToWorld(zt.x, zt.z);
+      const groundY = terrain.getGroundHeight(world.x, world.z);
+      const tile = new THREE.Mesh(tileGeo, heartMaterials.neutral.clone());
+      tile.position.set(world.x, groundY + 0.02, world.z); // Slight offset to avoid z-fighting
+      tile.receiveShadow = true;
+      tile.userData = {
+        id: `zone-${idx}`,
+        owner: null,
+        capture: 0,
+      };
+      scene.add(tile);
+      zones.push(tile);
+    });
+  } else {
+    // Fallback for old terrain API
+    const placements = [
+      { platform: 0, offset: new THREE.Vector3(0, 0.15, 0) },
+      { platform: 1, offset: new THREE.Vector3(-1, 0.15, -1) },
+      { platform: 1, offset: new THREE.Vector3(1.6, 0.15, 1.2) },
+      { platform: 2, offset: new THREE.Vector3(0, 0.15, 0) },
+      { platform: 3, offset: new THREE.Vector3(0, 0.15, 0) },
+    ];
+    placements.forEach((place, idx) => {
+      if (terrain.platforms && terrain.platforms[place.platform]) {
+        const plat = terrain.platforms[place.platform];
+        const tile = new THREE.Mesh(tileGeo, heartMaterials.neutral.clone());
+        tile.position.copy(plat.top.position).add(place.offset);
+        tile.receiveShadow = true;
+        tile.userData = {
+          id: `zone-${idx}`,
+          owner: null,
+          capture: 0,
+        };
+        scene.add(tile);
+        zones.push(tile);
+      }
+    });
+  }
 
-  placements.forEach((place, idx) => {
-    const plat = terrain.platforms[place.platform];
-    const tile = new THREE.Mesh(tileGeo, heartMaterials.neutral.clone());
-    tile.position.copy(plat.top.position).add(place.offset);
-    tile.receiveShadow = true;
-    tile.userData = {
-      id: `zone-${idx}`,
-      owner: null,
-      capture: 0,
-    };
-    scene.add(tile);
-    zones.push(tile);
-  });
+  // Spawn teams on zone tiles or fallback positions
+  const spawnPositions = [];
+  if (terrain.data && terrain.data.zoneTiles && terrain.data.zoneTiles.length >= 3) {
+    // Use first 3 zone tiles for spawning
+    terrain.data.zoneTiles.slice(0, 3).forEach(zt => {
+      const world = terrain.gridToWorld(zt.x, zt.z);
+      const groundY = terrain.getGroundHeight(world.x, world.z);
+      spawnPositions.push(new THREE.Vector3(world.x, groundY + 0.3, world.z));
+    });
+  } else if (terrain.platforms && terrain.platforms.length >= 3) {
+    // Fallback to old API
+    spawnPositions.push(
+      terrain.platforms[0].top.position.clone().add(new THREE.Vector3(0, 0.3, 0)),
+      terrain.platforms[1].top.position.clone().add(new THREE.Vector3(0, 0.3, 0)),
+      terrain.platforms[2].top.position.clone().add(new THREE.Vector3(0, 0.3, 0))
+    );
+  }
 
-  const teams = spawnTeams(scene, terrain.platforms);
+  const teams = spawnTeams(scene, spawnPositions, terrain);
+
+  // Store zones and teams in terrain for backwards compatibility
+  terrain.zones = zones;
+  terrain.teams = teams;
 
   const nameArea = buildNameArea(scene);
 

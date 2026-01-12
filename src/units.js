@@ -42,18 +42,17 @@ function makeRobot(color) {
   return mesh;
 }
 
-function placeUnits(platform, count, teamId) {
+function placeUnits(spawnPos, count, teamId, terrain) {
   const units = [];
   for (let i = 0; i < count; i++) {
     const type = i % 3;
     const color = TEAM_COLORS[teamId];
     const mesh = type === 0 ? makeStudent(color) : type === 1 ? makeTeacher(color) : makeRobot(color);
-    const spread = 0.6;
-    mesh.position.set(
-      platform.top.position.x + (Math.random() - 0.5) * spread,
-      platform.top.position.y + 0.25,
-      platform.top.position.z + (Math.random() - 0.5) * spread
-    );
+    const spread = 0.8;
+    const x = spawnPos.x + (Math.random() - 0.5) * spread;
+    const z = spawnPos.z + (Math.random() - 0.5) * spread;
+    const y = terrain && terrain.getGroundHeight ? terrain.getGroundHeight(x, z) + 0.3 : spawnPos.y;
+    mesh.position.set(x, y, z);
     mesh.userData = {
       team: teamId,
       hp: 100,
@@ -66,11 +65,19 @@ function placeUnits(platform, count, teamId) {
   return units;
 }
 
-export function spawnTeams(scene, platforms) {
+export function spawnTeams(scene, spawnPositions, terrain = null) {
+  if (!spawnPositions || spawnPositions.length < 3) {
+    console.warn('Not enough spawn positions, using defaults');
+    spawnPositions = [
+      new THREE.Vector3(-10, 2, -5),
+      new THREE.Vector3(5, 2, -2),
+      new THREE.Vector3(10, 2, 5),
+    ];
+  }
   const teams = {
-    player: placeUnits(platforms[0], 5, 'player'),
-    ai1: placeUnits(platforms[1], 5, 'ai1'),
-    ai2: placeUnits(platforms[2], 5, 'ai2'),
+    player: placeUnits(spawnPositions[0], 5, 'player', terrain),
+    ai1: placeUnits(spawnPositions[1], 5, 'ai1', terrain),
+    ai2: placeUnits(spawnPositions[2], 5, 'ai2', terrain),
   };
   Object.values(teams).flat().forEach(u => scene.add(u));
   return teams;

@@ -23,8 +23,26 @@ export function setupInput({ renderer, camera, scene, terrain, cameraController,
   function pickGround(event) {
     updatePointer(event);
     raycaster.setFromCamera(pointer, camera);
-    const intersects = raycaster.intersectObjects(terrain.platforms.map(p => p.top), false);
-    if (intersects.length > 0) return intersects[0].point;
+    
+    // Try new terrain API first (raycast against terrain group)
+    if (terrain.group) {
+      const intersects = raycaster.intersectObject(terrain.group, true);
+      if (intersects.length > 0) {
+        const point = intersects[0].point;
+        // Snap to ground height
+        if (terrain.getGroundHeight) {
+          point.y = terrain.getGroundHeight(point.x, point.z) + 0.1;
+        }
+        return point;
+      }
+    }
+    
+    // Fallback to old API
+    if (terrain.platforms && terrain.platforms.length > 0) {
+      const intersects = raycaster.intersectObjects(terrain.platforms.map(p => p.top), false);
+      if (intersects.length > 0) return intersects[0].point;
+    }
+    
     return null;
   }
 
