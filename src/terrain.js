@@ -13,24 +13,31 @@ export function buildTerrain(scene) {
   const grid = [];
   const gridMeshes = [];
   
-  // Material for grid cells
-  const gridMaterial = new THREE.MeshStandardMaterial({ 
-    color: 0xffffff,
-    side: THREE.DoubleSide,
-  });
-  gridMaterial.castShadow = true;
-  gridMaterial.receiveShadow = true;
+  // Base sand color (#F6D7B0) - will darken with height
+  const sandBase = new THREE.Color(0xF6D7B0);
   
-  // Black material for grid lines
-  const blackMaterial = new THREE.MeshBasicMaterial({ 
-    color: 0x000000,
-    side: THREE.DoubleSide,
+  // Find min/max heights for color normalization
+  let minHeight = Infinity;
+  let maxHeight = -Infinity;
+  for (let x = 0; x < GRID_SIZE; x++) {
+    for (let z = 0; z < GRID_SIZE; z++) {
+      const height = map[x][z].getY();
+      minHeight = Math.min(minHeight, height);
+      maxHeight = Math.max(maxHeight, height);
+    }
+  }
+  const heightRange = maxHeight - minHeight || 1;
+  
+  // Base material template (lighting off so per-cell color stays flat)
+  const gridMaterial = new THREE.MeshBasicMaterial({ 
+    color: sandBase,
+    side: THREE.FrontSide,
   });
   
   // Create individual grid meshes (quads connecting neighboring cells)
   for (let z = 0; z < GRID_SIZE - 1; z++) {
     for (let x = 0; x < GRID_SIZE - 1; x++) {
-      createGridMesh(scene, map, x, z, gridMaterial, blackMaterial, CELL_SIZE, GRID_SIZE);
+      createGridMesh(scene, map, x, z, gridMaterial, CELL_SIZE, GRID_SIZE, minHeight, heightRange, sandBase);
     }
   }
   
@@ -77,7 +84,7 @@ export function buildTerrain(scene) {
 /**
  * Create a quad mesh for a grid cell, connecting it with neighbors
  */
-function createGridMesh(scene, map, x, z, material, lineMaterial, cellSize, gridSize) {
+function createGridMesh(scene, map, x, z, material, cellSize, gridSize, minHeight, heightRange, baseColor) {
   const cell = map[x][z];
   
   // Get neighboring cells
@@ -92,7 +99,7 @@ function createGridMesh(scene, map, x, z, material, lineMaterial, cellSize, grid
   // Height scale factor (make terrain variation more visible)
   const heightScale = 0.2;
   
-  // Use the actual cell heights for each corner (shared corners will naturally match)
+  // Use the actual cell heights for each corner
   const bottomLeft = new THREE.Vector3(
     worldX - cellSize / 2,
     cell.getY() * heightScale,
@@ -143,9 +150,19 @@ function createGridMesh(scene, map, x, z, material, lineMaterial, cellSize, grid
   geometry.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
   geometry.computeVertexNormals();
   
-  // Create mesh with cell's color
-  const cellMaterial = material.clone();
-  cellMaterial.color.setHex(cell.color);
+  // Calculate height-based color for this cell (higher = darker)
+  const normalizedHeight = (cell.getY() - minHeight) / heightRange;
+  const color = baseColor.clone();
+  const brightnessShift = -normalizedHeight * 0.35; // darken up to -0.35 at highest
+  color.r = Math.max(0, Math.min(1, color.r + brightnessShift));
+  color.g = Math.max(0, Math.min(1, color.g + brightnessShift));
+  color.b = Math.max(0, Math.min(1, color.b + brightnessShift));
+  
+  // Store and reuse the computed color on the cell
+  cell.setColor(color.getHex());
+  
+  // Create mesh with a flat, per-cell color (no lighting variation within the quad)
+  const cellMaterial = new THREE.MeshBasicMaterial({ color: color });
   
   const mesh = new THREE.Mesh(geometry, cellMaterial);
   mesh.userData.cell = cell;
@@ -156,19 +173,4 @@ function createGridMesh(scene, map, x, z, material, lineMaterial, cellSize, grid
   
   // Store mesh reference in cell
   cell.mesh = mesh;
-  
-  // Create black border lines (only on right and top edges to avoid duplicates)
-  const lineGeometry = new THREE.BufferGeometry();
-  const lineVertices = new Float32Array([
-    bottomRight.x, bottomRight.y + 0.01, bottomRight.z,
-    topRight.x, topRight.y + 0.01, topRight.z,
-    topLeft.x, topLeft.y + 0.01, topLeft.z,
-  ]);
-  
-  lineGeometry.setAttribute('position', new THREE.BufferAttribute(lineVertices, 3));
-  
-  const line = new THREE.Line(lineGeometry, lineMaterial);
-  line.userData.isTerrain = true;
-  line.renderOrder = 1000; // Draw on top
-  scene.add(line);
 }
