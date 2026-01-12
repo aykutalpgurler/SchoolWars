@@ -70,6 +70,24 @@ export function buildTerrain(scene) {
     return getCell(row, col);
   }
   
+  /**
+   * Raycast to grid and return the hit cell
+   * @param {THREE.Raycaster} raycaster - The raycaster to use
+   * @returns {Object|null} - { cell: GridCell, point: Vector3 } or null if no hit
+   */
+  function raycastToGrid(raycaster) {
+    const intersects = raycaster.intersectObjects(gridMeshes, false);
+    if (intersects.length > 0) {
+      const hit = intersects[0];
+      const hitPoint = hit.point;
+      const cell = getCellFromWorldPos(hitPoint.x, hitPoint.z);
+      if (cell) {
+        return { cell, point: hitPoint };
+      }
+    }
+    return null;
+  }
+
   return {
     grid,
     gridMeshes,
@@ -77,6 +95,7 @@ export function buildTerrain(scene) {
     CELL_SIZE,
     getCell,
     getCellFromWorldPos,
+    raycastToGrid,
     generator, // Expose generator for access to moisture/temperature maps
   };
 }

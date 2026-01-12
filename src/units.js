@@ -125,8 +125,14 @@ function createTeamUnits(scene, terrain, teamId, startRow, startCol, geometryTyp
       unit.userData = {
         team: teamId,
         cell: cell,
+        currentCell: cell, // Track current grid cell for collision
         type: geometry.type,
       };
+      
+      // Add unit to cell's units array
+      if (cell) {
+        cell.addUnit(unit);
+      }
       
       scene.add(unit);
       units.push(unit);

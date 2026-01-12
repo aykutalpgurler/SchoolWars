@@ -15,7 +15,10 @@ export function computePath({ start, target, terrain }) {
   
   if (startCell === targetCell) {
     const t = target.clone();
-    t.y = startCell.y + 0.1;
+    const heightScale = 0.2;
+    const unitBaseHeight = 0.25;
+    const cellHeight = startCell.getY() * heightScale;
+    t.y = cellHeight + unitBaseHeight;
     return [t];
   }
   
@@ -79,14 +82,19 @@ export function computePath({ start, target, terrain }) {
       }
       
       // Convert grid cells to waypoints
+      // Use cell center X/Z but let collision system handle Y
+      const heightScale = 0.2;
+      const unitBaseHeight = 0.25;
       const waypoints = path.map(cell => {
-        const pos = cell.getCenter();
-        return new THREE.Vector3(pos.x, pos.y, pos.z);
+        const center = cell.getCenter();
+        const cellHeight = cell.getY() * heightScale;
+        return new THREE.Vector3(center.x, cellHeight + unitBaseHeight, center.z);
       });
       
-      // Add final target position
+      // Add final target position with correct height
       const finalTarget = target.clone();
-      finalTarget.y = targetCell.y + 0.1;
+      const targetHeight = targetCell.getY() * heightScale;
+      finalTarget.y = targetHeight + unitBaseHeight;
       waypoints.push(finalTarget);
       
       return waypoints;
@@ -114,23 +122,64 @@ export function computePath({ start, target, terrain }) {
     });
   }
   
-  // No path found, return direct target
-  return [target.clone()];
+  // No path found, return direct target with correct height
+  const fallbackTarget = target.clone();
+  if (targetCell) {
+    const heightScale = 0.2;
+    const unitBaseHeight = 0.25;
+    const cellHeight = targetCell.getY() * heightScale;
+    fallbackTarget.y = cellHeight + unitBaseHeight;
+  }
+  return [fallbackTarget];
 }
 
-export function stepAlongPath(unit, dt, path, speed = 2.5) {
+export function stepAlongPath(unit, dt, path, speed = 5.0) {
   if (!path || path.length === 0) return true;
   const target = path[0];
-  const dir = target.clone().sub(unit.position);
-  const dist = dir.length();
-  if (dist < 0.05) {
+  
+  // Calculate distance only in X/Z plane (ignore Y since collision system handles it)
+  const dx = target.x - unit.position.x;
+  const dz = target.z - unit.position.z;
+  const dist = Math.sqrt(dx * dx + dz * dz);
+  
+  // Use larger threshold to prevent getting stuck
+  if (dist < 0.2) {
     path.shift();
+    // Clear stuck tracking when reaching a waypoint
+    if (unit.userData._lastDist !== undefined) {
+      unit.userData._lastDist = undefined;
+      unit.userData._stuckTime = 0;
+    }
     return path.length === 0;
   }
-  dir.normalize();
-  unit.position.addScaledVector(dir, speed * dt);
-  // Keep height aligned
-  unit.position.y = target.y;
+  
+  // Safety check: if unit is making no progress (stuck), skip to next waypoint
+  // This prevents infinite loops where a unit can't reach a waypoint
+  if (unit.userData._lastDist !== undefined) {
+    if (Math.abs(dist - unit.userData._lastDist) < 0.01) {
+      unit.userData._stuckTime = (unit.userData._stuckTime || 0) + dt;
+      // If stuck for more than 0.5 seconds, skip to next waypoint
+      if (unit.userData._stuckTime > 0.5) {
+        path.shift();
+        unit.userData._lastDist = undefined;
+        unit.userData._stuckTime = 0;
+        return path.length === 0;
+      }
+    } else {
+      unit.userData._stuckTime = 0;
+    }
+  }
+  unit.userData._lastDist = dist;
+  
+  // Normalize direction in X/Z plane only
+  const dirX = dx / dist;
+  const dirZ = dz / dist;
+  
+  // Move in X and Z only, let collision system handle Y
+  const moveDistance = speed * dt;
+  unit.position.x += dirX * moveDistance;
+  unit.position.z += dirZ * moveDistance;
+  // Y will be set by collision system
   return false;
 }
 

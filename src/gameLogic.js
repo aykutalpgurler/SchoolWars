@@ -1,6 +1,7 @@
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
 import { computePath, stepAlongPath } from './pathfinding.js';
 import { runAI } from './ai.js';
+import { GridCollisionSystem } from './collision.js';
 
 export class GameLogic {
   constructor(scene, terrain) {
@@ -10,6 +11,7 @@ export class GameLogic {
     this.teams = terrain.teams || {};
     this.scores = { player: 0, ai1: 0, ai2: 0 };
     this.unitPaths = new Map();
+    this.collisionSystem = new GridCollisionSystem(scene, terrain);
   }
 
   setSceneEntities({ zones, teams }) {
@@ -18,7 +20,9 @@ export class GameLogic {
   }
 
   issueMove(units, target) {
-    units.forEach(unit => {
+    // Only allow moving cube units (team2)
+    const cubeUnits = units.filter(unit => unit.userData.type === 'cube' && unit.userData.team === 'team2');
+    cubeUnits.forEach(unit => {
       const path = computePath({
         start: unit.position.clone(),
         target: target.clone(),
@@ -26,18 +30,26 @@ export class GameLogic {
       });
       this.unitPaths.set(unit.uuid, path);
       unit.userData.target = target.clone();
+      // Clear any stuck state when issuing a new move
+      unit.userData._lastDist = undefined;
+      unit.userData._stuckTime = 0;
     });
   }
 
   update(dt) {
-    // Move units along paths
-    Object.values(this.teams).flat().forEach(unit => {
+    // Move units along paths FIRST
+    // Only move cube units (team2) - other units are controlled by AI
+    const cubeUnits = (this.teams.team2 || []).filter(unit => unit.userData.type === 'cube');
+    cubeUnits.forEach(unit => {
       const path = this.unitPaths.get(unit.uuid);
       if (path && path.length > 0) {
         const done = stepAlongPath(unit, dt, path);
         if (done) this.unitPaths.delete(unit.uuid);
       }
     });
+
+    // Update collision system after movement (snap units to grid)
+    this.collisionSystem.updateAllUnits(this.teams);
 
     // Run basic AI
     runAI(this);

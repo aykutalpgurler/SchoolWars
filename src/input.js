@@ -23,33 +23,77 @@ export function setupInput({ renderer, camera, scene, terrain, cameraController,
   function pickGround(event) {
     updatePointer(event);
     raycaster.setFromCamera(pointer, camera);
-    const intersects = raycaster.intersectObjects(terrain.gridMeshes, false);
-    if (intersects.length > 0) return intersects[0].point;
+    
+    // Use terrain's raycastToGrid method to get both point and cell
+    const hit = terrain.raycastToGrid(raycaster);
+    if (hit) {
+      return hit.point;
+    }
+    return null;
+  }
+
+  function pickGridCell(event) {
+    updatePointer(event);
+    raycaster.setFromCamera(pointer, camera);
+    
+    // Use terrain's raycastToGrid method to get the cell
+    const hit = terrain.raycastToGrid(raycaster);
+    if (hit) {
+      return hit.cell;
+    }
     return null;
   }
 
   function pickUnits(event) {
     updatePointer(event);
     raycaster.setFromCamera(pointer, camera);
-    const unitMeshes = Object.values(game.teams).flat();
-    const hits = raycaster.intersectObjects(unitMeshes, false);
+    // Only allow selecting cube units (team2)
+    const cubeUnits = (game.teams.team2 || []).filter(unit => unit.userData.type === 'cube');
+    const hits = raycaster.intersectObjects(cubeUnits, false);
     return hits.length > 0 ? hits[0].object : null;
   }
+
+  // Track if we're in "move mode" (unit selected, waiting for terrain click)
+  let moveMode = false;
 
   renderer.domElement.addEventListener('pointerdown', e => {
     if (e.button === 0) {
       dragState.active = true;
       dragState.start.set(e.clientX, e.clientY);
       dragState.end.copy(dragState.start);
+      
       const unit = pickUnits(e);
+      
       if (unit) {
+        // Clicked on a unit - select it and enter move mode
         clearSelection();
         addSelection(unit);
+        moveMode = true;
+        updateDebugInfo(unit, terrain);
+      } else {
+        // Check if we clicked on terrain
+        const groundHit = pickGround(e);
+        if (groundHit && selected.size > 0) {
+          // Clicked on terrain with unit selected - move to that location
+          game.issueMove([...selected], groundHit);
+          moveMode = false;
+          // Keep debug info showing
+          const unit = Array.from(selected)[0];
+          updateDebugInfo(unit, terrain);
+        } else if (groundHit) {
+          // Clicked on empty terrain - clear selection
+          clearSelection();
+          moveMode = false;
+          updateDebugInfo(null, terrain);
+        }
       }
     } else if (e.button === 2) {
+      // Right click also works for movement
       const point = pickGround(e);
       if (point && selected.size > 0) {
         game.issueMove([...selected], point);
+        moveMode = false;
+        updateDebugInfo(null, terrain);
       }
     }
   });
@@ -78,9 +122,10 @@ export function setupInput({ renderer, camera, scene, terrain, cameraController,
     const maxY = Math.max(dragState.start.y, dragState.end.y);
 
     const rectContains = (v) => v.x >= minX && v.x <= maxX && v.y >= minY && v.y <= maxY;
-    const units = Object.values(game.teams).flat();
+    // Only allow selecting cube units (team2)
+    const cubeUnits = (game.teams.team2 || []).filter(unit => unit.userData.type === 'cube');
     const newlySelected = [];
-    units.forEach(u => {
+    cubeUnits.forEach(u => {
       const screenPos = u.position.clone().project(camera);
       const px = (screenPos.x * 0.5 + 0.5) * renderer.domElement.clientWidth;
       const py = (-screenPos.y * 0.5 + 0.5) * renderer.domElement.clientHeight;
@@ -157,8 +202,42 @@ export function setupInput({ renderer, camera, scene, terrain, cameraController,
     if (e.code === 'KeyO') spotlight.position.y -= step;
   });
 
+  /**
+   * Update debug panel with unit and grid info
+   */
+  function updateDebugInfo(unit, terrain) {
+    const debugPanel = document.getElementById('debugPanel');
+    if (!debugPanel) return;
+
+    if (unit && unit.userData.currentCell) {
+      const cell = unit.userData.currentCell;
+      debugPanel.style.display = 'block';
+      
+      document.getElementById('debugUnit').textContent = `${unit.userData.team || 'Unknown'} (${unit.userData.type || 'unit'})`;
+      document.getElementById('debugCell').textContent = `Row: ${cell.row}, Col: ${cell.col}`;
+      document.getElementById('debugCoords').textContent = `(${cell.x.toFixed(2)}, ${cell.z.toFixed(2)})`;
+      document.getElementById('debugHeight').textContent = `${cell.getY().toFixed(2)}`;
+      document.getElementById('debugWalkable').textContent = cell.walkable ? 'Yes' : 'No';
+      document.getElementById('debugUnits').textContent = cell.units.length;
+    } else if (unit) {
+      // Unit selected but no cell yet
+      debugPanel.style.display = 'block';
+      document.getElementById('debugUnit').textContent = `${unit.userData.team || 'Unknown'} (${unit.userData.type || 'unit'})`;
+      document.getElementById('debugCell').textContent = 'No cell';
+      document.getElementById('debugCoords').textContent = `(${unit.position.x.toFixed(2)}, ${unit.position.z.toFixed(2)})`;
+      document.getElementById('debugHeight').textContent = unit.position.y.toFixed(2);
+      document.getElementById('debugWalkable').textContent = '-';
+      document.getElementById('debugUnits').textContent = '-';
+    } else {
+      // No unit selected
+      debugPanel.style.display = 'none';
+    }
+  }
+
+  // Expose updateDebugInfo for external updates
   return {
     selected,
+    updateDebugInfo: (unit) => updateDebugInfo(unit, terrain),
   };
 
   function translateSelection(axis, dir) {

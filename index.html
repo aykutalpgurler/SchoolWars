@@ -78,6 +78,37 @@
       border: 1px solid rgba(255, 255, 255, 0.08);
       pointer-events: none;
     }
+    .debug-panel {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      background: rgba(0, 0, 0, 0.75);
+      padding: 12px 14px;
+      border-radius: 8px;
+      font-size: 12px;
+      line-height: 1.6;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      backdrop-filter: blur(4px);
+      pointer-events: none;
+      min-width: 200px;
+      font-family: 'Courier New', monospace;
+    }
+    .debug-panel .title {
+      font-weight: 700;
+      margin-bottom: 6px;
+      color: #4ade80;
+      font-size: 13px;
+    }
+    .debug-panel .info-line {
+      margin: 2px 0;
+      color: #e5e7eb;
+    }
+    .debug-panel .label {
+      color: #9ca3af;
+    }
+    .debug-panel .value {
+      color: #fbbf24;
+    }
   </style>
 </head>
 <body>
@@ -87,6 +118,15 @@
     <div id="scoreText">Player: 0 | AI1: 0 | AI2: 0</div>
   </div>
   <div class="mini-status" id="shaderStatus">Shader: Phong</div>
+  <div class="debug-panel" id="debugPanel" style="display: none;">
+    <div class="title">Grid Debug Info</div>
+    <div class="info-line"><span class="label">Unit:</span> <span class="value" id="debugUnit">None</span></div>
+    <div class="info-line"><span class="label">Grid Cell:</span> <span class="value" id="debugCell">None</span></div>
+    <div class="info-line"><span class="label">Coordinates:</span> <span class="value" id="debugCoords">-</span></div>
+    <div class="info-line"><span class="label">Height:</span> <span class="value" id="debugHeight">-</span></div>
+    <div class="info-line"><span class="label">Walkable:</span> <span class="value" id="debugWalkable">-</span></div>
+    <div class="info-line"><span class="label">Units on Cell:</span> <span class="value" id="debugUnits">-</span></div>
+  </div>
   <div class="help-panel" id="helpPanel">
     <h3>Controls (H to toggle)</h3>
     <ul>
