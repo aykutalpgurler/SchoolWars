@@ -4,10 +4,15 @@ export function buildTerrain(scene) {
   const platforms = [];
   const ramps = [];
 
-  // Platform material - green grass-like
-  const platformMat = new THREE.MeshStandardMaterial({ color: 0x4a7c59 });
-  platformMat.castShadow = true;
-  platformMat.receiveShadow = true;
+  // Platform top material - green grass-like
+  const platformTopMat = new THREE.MeshStandardMaterial({ color: 0x4a7c59 });
+  platformTopMat.castShadow = true;
+  platformTopMat.receiveShadow = true;
+
+  // Platform side material - brown/darker earthy color
+  const platformSideMat = new THREE.MeshStandardMaterial({ color: 0x6b4e3d });
+  platformSideMat.castShadow = true;
+  platformSideMat.receiveShadow = true;
 
   // Ramp material - brown wood-like
   const rampMat = new THREE.MeshStandardMaterial({ color: 0x8b4513 });
@@ -27,59 +32,54 @@ export function buildTerrain(scene) {
 
   // Create platforms
   platformDefs.forEach(([x, z, width, depth, height], idx) => {
-    // Top surface - thin box for good shadows and accurate positioning
-    const topThickness = 0.1;
-    const topGeo = new THREE.BoxGeometry(width, topThickness, depth);
-    const top = new THREE.Mesh(topGeo, platformMat.clone());
-    // Position box center at 'height' so top face is at height + topThickness/2
-    // But set position.y = height for pathfinding (small visual offset is acceptable)
+    // Top surface - use plane for accurate positioning
+    const topGeo = new THREE.PlaneGeometry(width, depth);
+    const top = new THREE.Mesh(topGeo, platformTopMat.clone());
     top.position.set(x, height, z);
+    top.rotation.x = -Math.PI / 2; // Rotate to be horizontal
     top.castShadow = true;
     top.receiveShadow = true;
     scene.add(top);
 
-    // Side walls for visual depth (blocky diorama style)
-    // Walls extend from base (y=0) to top surface (y=height + topThickness/2)
-    const wallTop = height + topThickness / 2;
-    const wallHeight = wallTop;
-    if (wallHeight > 0.2) {
-      const wallThickness = 0.2;
+    // Side walls for visual depth (blocky diorama style with brown sides)
+    const sideHeight = height;
+    if (sideHeight > 0.1) {
       // Front wall
       const frontWall = new THREE.Mesh(
-        new THREE.BoxGeometry(width, wallHeight, wallThickness),
-        platformMat.clone()
+        new THREE.BoxGeometry(width, sideHeight, 0.2),
+        platformSideMat.clone()
       );
-      frontWall.position.set(x, wallHeight / 2, z - depth / 2);
+      frontWall.position.set(x, height - sideHeight / 2 - 0.1, z - depth / 2);
       frontWall.castShadow = true;
       frontWall.receiveShadow = true;
       scene.add(frontWall);
 
       // Back wall
       const backWall = new THREE.Mesh(
-        new THREE.BoxGeometry(width, wallHeight, wallThickness),
-        platformMat.clone()
+        new THREE.BoxGeometry(width, sideHeight, 0.2),
+        platformSideMat.clone()
       );
-      backWall.position.set(x, wallHeight / 2, z + depth / 2);
+      backWall.position.set(x, height - sideHeight / 2 - 0.1, z + depth / 2);
       backWall.castShadow = true;
       backWall.receiveShadow = true;
       scene.add(backWall);
 
       // Left wall
       const leftWall = new THREE.Mesh(
-        new THREE.BoxGeometry(wallThickness, wallHeight, depth),
-        platformMat.clone()
+        new THREE.BoxGeometry(0.2, sideHeight, depth),
+        platformSideMat.clone()
       );
-      leftWall.position.set(x - width / 2, wallHeight / 2, z);
+      leftWall.position.set(x - width / 2, height - sideHeight / 2 - 0.1, z);
       leftWall.castShadow = true;
       leftWall.receiveShadow = true;
       scene.add(leftWall);
 
       // Right wall
       const rightWall = new THREE.Mesh(
-        new THREE.BoxGeometry(wallThickness, wallHeight, depth),
-        platformMat.clone()
+        new THREE.BoxGeometry(0.2, sideHeight, depth),
+        platformSideMat.clone()
       );
-      rightWall.position.set(x + width / 2, wallHeight / 2, z);
+      rightWall.position.set(x + width / 2, height - sideHeight / 2 - 0.1, z);
       rightWall.castShadow = true;
       rightWall.receiveShadow = true;
       scene.add(rightWall);
@@ -100,7 +100,7 @@ export function buildTerrain(scene) {
     [4, 5, 'right'],   // Top-center to top-right
   ];
 
-  // Create ramps
+  // Create stepped ramps (stair-like)
   rampConnections.forEach(([aIdx, bIdx, dir]) => {
     const platA = platforms[aIdx];
     const platB = platforms[bIdx];
@@ -111,34 +111,51 @@ export function buildTerrain(scene) {
     const direction = new THREE.Vector3().subVectors(posB, posA);
     const horizontalDist = Math.sqrt(direction.x * direction.x + direction.z * direction.z);
     const verticalDist = direction.y;
-    const totalLength = direction.length();
 
     // Ramp dimensions
     const rampWidth = 2.5; // Wide ramp
-    const rampHeight = 0.3; // Thickness of ramp
-    const rampLength = totalLength;
+    const stepHeight = 0.25; // Height of each step
+    const stepDepth = 0.7; // Depth of each step (horizontal distance per step)
+    
+    // Calculate number of steps needed
+    const numSteps = Math.max(2, Math.ceil(horizontalDist / stepDepth));
+    const actualStepDepth = horizontalDist / numSteps;
+    const stepVerticalIncrement = verticalDist / numSteps;
 
-    // Position ramp at midpoint
-    const rampPos = new THREE.Vector3().addVectors(posA, posB).multiplyScalar(0.5);
-
-    // Calculate rotation to align ramp with direction
-    // First, rotate around Y axis to face the horizontal direction
+    // Calculate the horizontal direction unit vector
+    const horizontalDir = new THREE.Vector3(direction.x, 0, direction.z).normalize();
     const yRotation = Math.atan2(direction.x, direction.z);
-    // Then, rotate around X axis (in local space) to slope up/down
-    const xRotation = -Math.atan2(verticalDist, horizontalDist);
 
-    // Create ramp mesh
-    const rampGeo = new THREE.BoxGeometry(rampWidth, rampHeight, rampLength);
-    const ramp = new THREE.Mesh(rampGeo, rampMat.clone());
-    ramp.position.copy(rampPos);
-    // Apply rotations: use YXZ order so Y rotation happens first, then X
-    ramp.rotation.order = 'YXZ';
-    ramp.rotation.set(xRotation, yRotation, 0);
-    ramp.castShadow = true;
-    ramp.receiveShadow = true;
-    scene.add(ramp);
+    // Create individual step boxes
+    const rampSteps = [];
+    for (let i = 0; i < numSteps; i++) {
+      const t = i / numSteps;
+      const nextT = (i + 1) / numSteps;
+      
+      // Calculate step center position along the ramp path
+      const stepCenterX = posA.x + direction.x * (t + nextT) / 2;
+      const stepCenterZ = posA.z + direction.z * (t + nextT) / 2;
+      // Step top surface should be at the interpolated height
+      const stepTopY = posA.y + direction.y * (t + nextT) / 2;
+      
+      // Create step box
+      const stepGeo = new THREE.BoxGeometry(rampWidth, stepHeight, actualStepDepth);
+      const step = new THREE.Mesh(stepGeo, rampMat.clone());
+      // Position step so its top surface is at stepTopY
+      step.position.set(stepCenterX, stepTopY + stepHeight / 2, stepCenterZ);
+      step.rotation.y = yRotation;
+      step.castShadow = true;
+      step.receiveShadow = true;
+      scene.add(step);
+      rampSteps.push(step);
+    }
 
-    ramps.push({ a: aIdx, b: bIdx, mesh: ramp });
+    // For pathfinding, create a dummy mesh at midpoint for reference
+    // The actual steps are already positioned correctly
+    const rampMidpoint = new THREE.Vector3().addVectors(posA, posB).multiplyScalar(0.5);
+    const rampMesh = rampSteps[Math.floor(rampSteps.length / 2)]; // Use middle step as reference
+    
+    ramps.push({ a: aIdx, b: bIdx, mesh: rampMesh, steps: rampSteps });
   });
 
   return { platforms, ramps };

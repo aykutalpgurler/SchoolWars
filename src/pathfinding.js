@@ -65,11 +65,36 @@ export function computePath({ start, target, terrain }) {
   rampSequence.reverse();
 
   const waypoints = [];
+  
+  // Track current platform for ramp waypoint generation
+  let currentPlatIdx = startPlat;
+  
   rampSequence.forEach(rampIdx => {
     const ramp = ramps[rampIdx];
-    const pos = ramp.mesh.position.clone();
-    pos.y = ramp.mesh.position.y + 0.2;
-    waypoints.push(pos);
+    const platA = platforms[ramp.a];
+    const platB = platforms[ramp.b];
+    
+    // Determine which platform is the start based on current path
+    const startPlatform = (currentPlatIdx === ramp.a) ? platA : platB;
+    const endPlatform = (currentPlatIdx === ramp.a) ? platB : platA;
+    
+    const startPos = startPlatform.top.position.clone();
+    const endPos = endPlatform.top.position.clone();
+    
+    // Generate waypoints along the ramp surface
+    // Create 4-5 waypoints distributed along the ramp
+    const numWaypoints = Math.max(4, Math.ceil((startPos.distanceTo(endPos)) / 2));
+    
+    for (let i = 0; i <= numWaypoints; i++) {
+      const t = i / numWaypoints;
+      const waypoint = new THREE.Vector3().lerpVectors(startPos, endPos, t);
+      // Interpolate height linearly along the ramp
+      waypoint.y = startPos.y + (endPos.y - startPos.y) * t;
+      waypoints.push(waypoint);
+    }
+    
+    // Update current platform
+    currentPlatIdx = (currentPlatIdx === ramp.a) ? ramp.b : ramp.a;
   });
 
   const finalTarget = target.clone();
