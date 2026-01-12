@@ -142,8 +142,8 @@ async function loadCobraModel() {
             const size = box.getSize(new THREE.Vector3());
             const maxDim = Math.max(size.x, size.y, size.z);
             
-            // Scale to approximately match the old cube size (0.3 x 0.3 x 0.3)
-            const targetSize = 0.3;
+            // Scale to larger size for better visibility
+            const targetSize = 1.2;
             const scale = targetSize / maxDim;
             object.scale.set(scale, scale, scale);
             
@@ -249,8 +249,8 @@ function makeCubeUnit(color) {
   const maxDim = Math.max(size.x, size.y, size.z);
   
   // Create an invisible collision helper (larger sphere for easier clicking)
-  // Make it about 5x the size of the model for much easier clicking
-  const collisionRadius = maxDim * 5.0;
+  // Make it about 3x the size of the model for easier clicking (adjusted for larger models)
+  const collisionRadius = maxDim * 3.0;
   const collisionHelper = new THREE.Mesh(
     new THREE.SphereGeometry(collisionRadius, 16, 16),
     new THREE.MeshBasicMaterial({ 
@@ -447,8 +447,8 @@ async function loadAntModel() {
             const size = box.getSize(new THREE.Vector3());
             const maxDim = Math.max(size.x, size.y, size.z);
             
-            // Scale to approximately match the old triangle size (0.2 radius)
-            const targetSize = 0.4;
+            // Scale to larger size for better visibility
+            const targetSize = 1.6;
             const scale = targetSize / maxDim;
             object.scale.set(scale, scale, scale);
             
@@ -714,8 +714,8 @@ async function loadCamelModel() {
             const size = box.getSize(new THREE.Vector3());
             const maxDim = Math.max(size.x, size.y, size.z);
             
-            // Scale to approximately match the old sphere size (0.2 radius = 0.4 diameter)
-            const targetSize = 0.4;
+            // Scale to larger size for better visibility
+            const targetSize = 1.6;
             const scale = targetSize / maxDim;
             object.scale.set(scale, scale, scale);
             
@@ -921,9 +921,9 @@ function createTeamUnits(scene, terrain, teamId, startRow, startCol, geometryTyp
   
   // Map geometry type to creator function and properties
   const geometryMap = {
-    'sphere': { create: makeSphereUnit, yOffset: 0.05, type: 'sphere' }, // Camel model (feet at y=0)
-    'cube': { create: makeCubeUnit, yOffset: 0.15, type: 'cube' },
-    'triangle': { create: makeTriangleUnit, yOffset: 0.05, type: 'triangle' }, // Ant model (bottom at y=0)
+    'sphere': { create: makeSphereUnit, yOffset: 0.2, type: 'sphere' }, // Camel model (feet at y=0) - increased yOffset for larger model
+    'cube': { create: makeCubeUnit, yOffset: 0.6, type: 'cube' }, // Increased yOffset for larger cobra model
+    'triangle': { create: makeTriangleUnit, yOffset: 0.2, type: 'triangle' }, // Ant model (bottom at y=0) - increased yOffset for larger model
   };
   
   const geometry = geometryMap[geometryType];
