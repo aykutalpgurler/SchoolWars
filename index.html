@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>School Wars 3D - King of the Hill</title>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: "Inter", system-ui, -apple-system, sans-serif;
+      background: #0a0a0a;
+      color: #eaeaea;
+    }
+    #app {
+      position: relative;
+      width: 100%;
+      height: 100%;
+    }
+    canvas {
+      display: block;
+    }
+    .hud {
+      position: absolute;
+      top: 12px;
+      left: 12px;
+      background: rgba(0, 0, 0, 0.55);
+      padding: 10px 12px;
+      border-radius: 8px;
+      font-size: 14px;
+      line-height: 1.4;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      backdrop-filter: blur(4px);
+      pointer-events: none;
+    }
+    .hud .title {
+      font-weight: 700;
+      margin-bottom: 4px;
+      color: #8fd3ff;
+    }
+    .help-panel {
+      position: absolute;
+      right: 12px;
+      top: 12px;
+      max-width: 360px;
+      background: rgba(0, 0, 0, 0.7);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 10px;
+      padding: 12px 14px;
+      font-size: 13px;
+      line-height: 1.5;
+      display: none;
+      backdrop-filter: blur(6px);
+    }
+    .help-panel.visible {
+      display: block;
+    }
+    .help-panel h3 {
+      margin: 0 0 6px 0;
+      font-size: 15px;
+      color: #ffd166;
+    }
+    .help-panel ul {
+      margin: 0;
+      padding-left: 16px;
+    }
+    .mini-status {
+      position: absolute;
+      bottom: 12px;
+      left: 12px;
+      background: rgba(0, 0, 0, 0.55);
+      padding: 8px 10px;
+      border-radius: 8px;
+      font-size: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+  <div class="hud" id="scoreHud">
+    <div class="title">Scores</div>
+    <div id="scoreText">Player: 0 | AI1: 0 | AI2: 0</div>
+  </div>
+  <div class="mini-status" id="shaderStatus">Shader: Phong</div>
+  <div class="help-panel" id="helpPanel">
+    <h3>Controls (H to toggle)</h3>
+    <ul>
+      <li>Move camera: WASD/QE; rotate: Arrow keys or right-drag</li>
+      <li>Select: Click; Drag-select: Drag left mouse</li>
+      <li>Move units: Right-click ground</li>
+      <li>Shaders: T toggles Phong/Toon</li>
+      <li>Spotlight: L toggle; [ / ] intensity; I/K/J/L/U/O move</li>
+      <li>Axis select: X/Y/Z (translate axis), Shift+X/Y/Z (rotate axis)</li>
+      <li>Transform selection: C/V translate ± along axis; R/F rotate ±</li>
+      <li>Name area flythrough: N (go/return)</li>
+      <li>Help: H</li>
+    </ul>
+  </div>
+  <script type="module" src="./src/main.js"></script>
+</body>
+</html>
+
