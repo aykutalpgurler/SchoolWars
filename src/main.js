@@ -23,23 +23,34 @@ camera.lookAt(0, 0, 0);
 
 const cameraController = setupCameraController(camera, renderer.domElement);
 const { directional, spotlight, spotlightTarget, spotlightUniforms } = setupLights(scene);
-const { terrain, teams } = buildSceneContent(scene);
 
-// Setup game logic
-const game = new GameLogic(scene, terrain);
-game.setSceneEntities({ teams });
+// Initialize scene content asynchronously (to load camel model)
+let terrain, teams, game, input;
 
-// Setup input
-const input = setupInput({
-  renderer,
-  camera,
-  scene,
-  terrain,
-  cameraController,
-  game,
-  spotlight,
-  spotlightTarget,
-});
+(async () => {
+  const sceneContent = await buildSceneContent(scene);
+  terrain = sceneContent.terrain;
+  teams = sceneContent.teams;
+
+  // Setup game logic
+  game = new GameLogic(scene, terrain);
+  game.setSceneEntities({ teams });
+
+  // Setup input
+  input = setupInput({
+    renderer,
+    camera,
+    scene,
+    terrain,
+    cameraController,
+    game,
+    spotlight,
+    spotlightTarget,
+  });
+
+  // Expose for debug in console
+  window.__schoolwars = { scene, camera, renderer, terrain };
+})();
 
 window.addEventListener('resize', () => {
   const { innerWidth, innerHeight } = window;
@@ -56,16 +67,6 @@ function animate() {
   lastTime = now;
 
   cameraController.update(dt);
-  game.update(dt);
-
-  // Update debug info if unit is selected
-  const selected = input.selected;
-  if (selected.size > 0) {
-    const unit = Array.from(selected)[0];
-    input.updateDebugInfo(unit);
-  } else {
-    input.updateDebugInfo(null);
-  }
 
   // Day/night cycle for polish
   const time = performance.now() * 0.00005;
@@ -81,11 +82,24 @@ function animate() {
     spotlightUniforms.spotIntensity.value = spotlight.intensity;
   }
 
+  // Only render if game is initialized
+  if (game) {
+    game.update(dt);
+  }
+
+  // Update debug info if unit is selected
+  if (input) {
+    const selected = input.selected;
+    if (selected.size > 0) {
+      const unit = Array.from(selected)[0];
+      input.updateDebugInfo(unit);
+    } else {
+      input.updateDebugInfo(null);
+    }
+  }
+
   renderer.render(scene, camera);
 }
 
 animate();
-
-// Expose for debug in console
-window.__schoolwars = { scene, camera, renderer, terrain };
 
