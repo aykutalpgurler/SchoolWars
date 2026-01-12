@@ -40,16 +40,25 @@ export class GameLogic {
     // Move units along paths FIRST
     // Only move cube units (team2) - other units are controlled by AI
     const cubeUnits = (this.teams.team2 || []).filter(unit => unit.userData.type === 'cube');
+    const unitsThatFinished = [];
     cubeUnits.forEach(unit => {
       const path = this.unitPaths.get(unit.uuid);
       if (path && path.length > 0) {
         const done = stepAlongPath(unit, dt, path);
-        if (done) this.unitPaths.delete(unit.uuid);
+        if (done) {
+          this.unitPaths.delete(unit.uuid);
+          unitsThatFinished.push(unit);
+        }
       }
     });
 
     // Update collision system after movement (snap units to grid)
     this.collisionSystem.updateAllUnits(this.teams);
+
+    // Notify that units finished moving (for clearing selection)
+    if (unitsThatFinished.length > 0 && this.onUnitsFinishedMoving) {
+      this.onUnitsFinishedMoving(unitsThatFinished);
+    }
 
     // Run basic AI
     runAI(this);

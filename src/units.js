@@ -1,4 +1,5 @@
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
+// Import Three.js loaders (addons) - using CDN path for examples/jsm/loaders
 import { OBJLoader } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/loaders/OBJLoader.js';
 import { MTLLoader } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/loaders/MTLLoader.js';
 
@@ -8,31 +9,581 @@ const TEAM_COLORS = {
   team3: 0xfacc15, // Yellow
 };
 
-// Cache for loaded camel model
+// Cache for loaded models
 let camelModelCache = null;
+let antModelCache = null;
+let cobraModelCache = null;
 
 /**
- * Create a simple cube unit
+ * Load the cobra model (cached after first load)
  */
-function makeCubeUnit(color) {
-  const geo = new THREE.BoxGeometry(0.3, 0.3, 0.3);
-  const mat = new THREE.MeshStandardMaterial({ color });
-  const mesh = new THREE.Mesh(geo, mat);
-  mesh.castShadow = true;
-  mesh.receiveShadow = true;
-  return mesh;
+async function loadCobraModel() {
+  if (cobraModelCache) {
+    return cobraModelCache;
+  }
+
+  return new Promise((resolve, reject) => {
+    // Use Three.js MTLLoader and OBJLoader (addons)
+    const mtlLoader = new MTLLoader();
+    const objLoader = new OBJLoader();
+
+    // Set the path for loading textures referenced in MTL
+    mtlLoader.setPath('./assets/desert-creatures/Cobra/');
+    objLoader.setPath('./assets/desert-creatures/Cobra/');
+
+    // Load MTL material file first
+    mtlLoader.load(
+      'cobra.mtl',
+      (materials) => {
+        // Log loaded material names for debugging
+        console.log('Cobra MTL loaded. Material names:', Object.keys(materials.materials));
+        
+        // Preload materials (this loads textures)
+        materials.preload();
+        
+        // Verify texture loading and set color space
+        Object.keys(materials.materials).forEach((materialName) => {
+          const mtlMaterial = materials.materials[materialName];
+          if (mtlMaterial && mtlMaterial.map) {
+            console.log(`Cobra texture loaded for ${materialName}:`, mtlMaterial.map.image ? 'Success' : 'Failed');
+            // Set texture color space to sRGB for correct color rendering
+            mtlMaterial.map.colorSpace = THREE.SRGBColorSpace;
+            mtlMaterial.map.flipY = false;
+          } else {
+            console.warn(`Cobra material ${materialName} has no texture map`);
+          }
+        });
+        
+        // Set materials for OBJ loader
+        objLoader.setMaterials(materials);
+
+        // Load OBJ model
+        objLoader.load(
+          'cobra.obj',
+          (object) => {
+            console.log('Cobra OBJ loaded. Meshes:', object.children.length);
+            
+            // Override materials with stylized low-poly material
+            object.traverse((child) => {
+              if (child.isMesh && child.material) {
+                // Log per-mesh material assignment
+                const originalMaterial = Array.isArray(child.material) ? child.material[0] : child.material;
+                console.log(`Cobra mesh "${child.name || 'unnamed'}" material:`, originalMaterial?.name || 'default');
+                
+                // Ensure geometry has proper normals for flat shading
+                if (child.geometry) {
+                  // Compute vertex normals if needed (flat shading will use face normals)
+                  if (!child.geometry.attributes.normal || child.geometry.attributes.normal.count === 0) {
+                    child.geometry.computeVertexNormals();
+                  }
+                }
+                
+                // Handle both single material and material arrays
+                const materials = Array.isArray(child.material) ? child.material : [child.material];
+                const newMaterials = [];
+                
+                materials.forEach((material) => {
+                  if (!material) return;
+                  
+                  // Create a new stylized material for clean low-poly look
+                  const newMaterial = new THREE.MeshStandardMaterial();
+                  
+                  // Get texture from original material if it exists
+                  if (material.map) {
+                    newMaterial.map = material.map;
+                    newMaterial.map.colorSpace = THREE.SRGBColorSpace; // Ensure sRGB
+                    newMaterial.map.flipY = false;
+                    console.log(`Cobra texture applied: ${material.map.image ? 'Success' : 'Failed'}`);
+                  } else {
+                    // Fallback: manually load texture if MTL didn't load it
+                    console.warn('Cobra material has no texture, attempting fallback load...');
+                    const textureLoader = new THREE.TextureLoader();
+                    textureLoader.load(
+                      './assets/desert-creatures/Cobra/cobraTxt.png',
+                      (texture) => {
+                        texture.colorSpace = THREE.SRGBColorSpace;
+                        texture.flipY = false;
+                        newMaterial.map = texture;
+                        newMaterial.needsUpdate = true;
+                        console.log('Cobra fallback texture loaded successfully');
+                      },
+                      undefined,
+                      (error) => {
+                        console.error('Cobra fallback texture load failed:', error);
+                      }
+                    );
+                  }
+                  
+                  // Set color to white so texture shows at full brightness
+                  // Some MTL materials have Kd 0,0,0 which means they rely entirely on texture
+                  newMaterial.color.setHex(0xffffff);
+                  
+                  // Stylized low-poly material properties
+                  newMaterial.roughness = 0.8; // Medium-high roughness for stylized look (not plastic)
+                  newMaterial.metalness = 0.0; // Non-metallic for organic look
+                  newMaterial.flatShading = true; // Enable flat shading for low-poly facet readability
+                  
+                  // Ensure proper side rendering
+                  newMaterial.side = THREE.FrontSide;
+                  
+                  newMaterials.push(newMaterial);
+                });
+                
+                // Update the mesh material
+                child.material = Array.isArray(child.material) ? newMaterials : newMaterials[0];
+                
+                child.castShadow = true;
+                child.receiveShadow = true;
+              }
+            });
+            
+            // Calculate bounding box to determine scale
+            const box = new THREE.Box3().setFromObject(object);
+            const size = box.getSize(new THREE.Vector3());
+            const maxDim = Math.max(size.x, size.y, size.z);
+            
+            // Scale to approximately match the old cube size (0.3 x 0.3 x 0.3)
+            const targetSize = 0.3;
+            const scale = targetSize / maxDim;
+            object.scale.set(scale, scale, scale);
+            
+            // Recalculate box after scaling
+            box.setFromObject(object);
+            
+            // Position model so its bottom (min Y) is at y=0
+            const min = box.min;
+            object.position.y = -min.y;
+            
+            // Center horizontally (x and z)
+            const center = box.getCenter(new THREE.Vector3());
+            object.position.x = -center.x;
+            object.position.z = -center.z;
+            
+            cobraModelCache = object;
+            resolve(object);
+          },
+          undefined,
+          (error) => {
+            console.error('Error loading OBJ file:', error);
+            reject(error);
+          }
+        );
+      },
+      undefined,
+      (error) => {
+        console.error('Error loading MTL file:', error);
+        // Fallback: load OBJ with manual texture
+        const textureLoader = new THREE.TextureLoader();
+        textureLoader.load(
+          './assets/desert-creatures/Cobra/cobraTxt.png',
+          (texture) => {
+            texture.colorSpace = THREE.SRGBColorSpace;
+            texture.flipY = false;
+            console.log('Cobra fallback texture loaded');
+            objLoader.load(
+              './assets/desert-creatures/Cobra/cobra.obj',
+              (object) => {
+                object.traverse((child) => {
+                  if (child.isMesh) {
+                    child.material = new THREE.MeshStandardMaterial({
+                      map: texture,
+                      color: 0xffffff,
+                      roughness: 0.8,
+                      metalness: 0.0,
+                      flatShading: true // Low-poly facet readability
+                    });
+                    child.castShadow = true;
+                    child.receiveShadow = true;
+                  }
+                });
+                
+                const box = new THREE.Box3().setFromObject(object);
+                const size = box.getSize(new THREE.Vector3());
+                const maxDim = Math.max(size.x, size.y, size.z);
+                const targetSize = 0.3;
+                const scale = targetSize / maxDim;
+                object.scale.set(scale, scale, scale);
+                box.setFromObject(object);
+                const min = box.min;
+                object.position.y = -min.y;
+                const center = box.getCenter(new THREE.Vector3());
+                object.position.x = -center.x;
+                object.position.z = -center.z;
+                
+                cobraModelCache = object;
+                resolve(object);
+              },
+              undefined,
+              reject
+            );
+          },
+          undefined,
+          reject
+        );
+      }
+    );
+  });
 }
 
 /**
- * Create a simple triangle (3D tetrahedron) unit
+ * Create a cobra unit from the loaded model (replaces cube)
+ */
+function makeCubeUnit(color) {
+  if (!cobraModelCache) {
+    console.error('Cobra model not loaded yet. Call loadCobraModel() first.');
+    // Fallback to cube if model not loaded
+    const geo = new THREE.BoxGeometry(0.3, 0.3, 0.3);
+    const mat = new THREE.MeshStandardMaterial({ color });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    return mesh;
+  }
+
+  // Clone the cached model (deep clone to clone materials and textures)
+  const cobra = cobraModelCache.clone(true);
+  
+  // Calculate bounding box to determine size for collision helper
+  const box = new THREE.Box3().setFromObject(cobra);
+  const size = box.getSize(new THREE.Vector3());
+  const maxDim = Math.max(size.x, size.y, size.z);
+  
+  // Create an invisible collision helper (larger sphere for easier clicking)
+  // Make it about 5x the size of the model for much easier clicking
+  const collisionRadius = maxDim * 5.0;
+  const collisionHelper = new THREE.Mesh(
+    new THREE.SphereGeometry(collisionRadius, 16, 16),
+    new THREE.MeshBasicMaterial({ 
+      visible: false, // Invisible but still raycastable
+      transparent: true,
+      opacity: 0
+    })
+  );
+  collisionHelper.name = 'collisionHelper';
+  collisionHelper.userData.isCollisionHelper = true;
+  // Position at center of the model
+  const center = box.getCenter(new THREE.Vector3());
+  collisionHelper.position.copy(center);
+  cobra.add(collisionHelper);
+  
+  // Apply team color as a very subtle tint while preserving material properties
+  cobra.traverse((child) => {
+    if (child.isMesh && child.material) {
+      // Skip collision helper
+      if (child.userData.isCollisionHelper) return;
+      
+      // Handle both single material and material arrays
+      const materials = Array.isArray(child.material) ? child.material : [child.material];
+      const clonedMaterials = materials.map(material => {
+        if (!material) return material;
+        const cloned = material.clone();
+        
+        // Preserve flat shading for low-poly look
+        if (material.flatShading !== undefined) {
+          cloned.flatShading = material.flatShading;
+        }
+        
+        // Clone texture if present and ensure sRGB color space
+        if (material.map) {
+          cloned.map = material.map.clone();
+          cloned.map.colorSpace = THREE.SRGBColorSpace;
+          cloned.map.flipY = false;
+        }
+        
+        return cloned;
+      });
+      
+      clonedMaterials.forEach((material) => {
+        if (!material) return;
+        
+        // If material has a texture, ensure it's visible with subtle team tint
+        if (material.map) {
+          // Set color to white so texture shows at full brightness
+          material.color.setHex(0xffffff);
+          // Apply very subtle team color tint (98% white, 2% team color)
+          const teamColor = new THREE.Color(color);
+          teamColor.lerp(new THREE.Color(0xffffff), 0.98);
+          material.color.multiply(teamColor);
+        } else {
+          // If no texture, set the color directly
+          material.color = new THREE.Color(color);
+        }
+        
+        // Ensure material properties are preserved
+        material.roughness = material.roughness ?? 0.8;
+        material.metalness = material.metalness ?? 0.0;
+        material.flatShading = material.flatShading ?? true;
+      });
+      
+      // Update the mesh material
+      child.material = Array.isArray(child.material) ? clonedMaterials : clonedMaterials[0];
+    }
+  });
+  
+  return cobra;
+}
+
+/**
+ * Load the ant model (cached after first load)
+ */
+async function loadAntModel() {
+  if (antModelCache) {
+    return antModelCache;
+  }
+
+  return new Promise((resolve, reject) => {
+    // Use Three.js MTLLoader and OBJLoader (addons)
+    const mtlLoader = new MTLLoader();
+    const objLoader = new OBJLoader();
+
+    // Set the path for loading textures referenced in MTL
+    mtlLoader.setPath('./assets/desert-creatures/Ant/');
+    objLoader.setPath('./assets/desert-creatures/Ant/');
+
+        // Load MTL material file first
+        mtlLoader.load(
+          'ant.mtl',
+          (materials) => {
+            // Preload materials (this loads textures)
+            materials.preload();
+            
+            // Ensure dark colors from MTL are properly applied
+            // The MTL has very dark Kd values (0.03, 0.02, 0.03 and 0.01, 0.01, 0.01)
+            Object.keys(materials.materials).forEach((materialName) => {
+              const mtlMaterial = materials.materials[materialName];
+              if (mtlMaterial) {
+                // Ensure the color from MTL Kd values is preserved
+                // MTLLoader should set this, but we'll ensure it's correct
+                if (mtlMaterial.color) {
+                  // The MTL Kd values are already very dark, so keep them
+                  // Don't override to white
+                } else {
+                  // If color wasn't set, use the dark values from MTL
+                  // lambert7SG: Kd 0.03 0.02 0.03, lambert8SG: Kd 0.01 0.01 0.01
+                  if (materialName.includes('lambert8')) {
+                    mtlMaterial.color = new THREE.Color(0x010101); // Very dark, almost black
+                  } else {
+                    mtlMaterial.color = new THREE.Color(0x030203); // Dark gray
+                  }
+                }
+              }
+            });
+            
+            // Set materials for OBJ loader
+            objLoader.setMaterials(materials);
+
+        // Load OBJ model
+        objLoader.load(
+          'ant.obj',
+          (object) => {
+            // Ensure all meshes have proper material settings
+            object.traverse((child) => {
+              if (child.isMesh && child.material) {
+                // Handle both single material and material arrays
+                const materials = Array.isArray(child.material) ? child.material : [child.material];
+                
+                materials.forEach((material, index) => {
+                  if (!material) return;
+                  
+                  // Preserve the dark color from MTL - DO NOT override to white
+                  // The MTL has intentionally dark Kd values (0.01-0.03) for a dark/black look
+                  
+                  // Ensure material properties for good shading and contrast
+                  if (material.isMeshStandardMaterial || material.isMeshPhongMaterial || material.isMeshLambertMaterial) {
+                    // Material is already a standard type, just enhance properties
+                    if (material.roughness !== undefined) {
+                      material.roughness = 0.7; // For MeshStandardMaterial
+                    }
+                    if (material.metalness !== undefined) {
+                      material.metalness = 0.1; // For MeshStandardMaterial
+                    }
+                    if (material.shininess !== undefined) {
+                      material.shininess = 30; // For MeshPhongMaterial
+                    }
+                  } else {
+                    // Convert to MeshStandardMaterial if it's not already a standard type
+                    const newMaterial = new THREE.MeshStandardMaterial();
+                    
+                    // Preserve the dark color from MTL
+                    if (material.color) {
+                      newMaterial.color.copy(material.color);
+                    } else {
+                      // Use dark color from MTL
+                      newMaterial.color.setRGB(0.02, 0.02, 0.02);
+                    }
+                    
+                    newMaterial.roughness = 0.7;
+                    newMaterial.metalness = 0.1;
+                    
+                    if (material.map) {
+                      newMaterial.map = material.map;
+                      newMaterial.map.flipY = false;
+                    }
+                    
+                    materials[index] = newMaterial;
+                    return;
+                  }
+                  
+                  // Ensure texture is configured correctly
+                  if (material.map) {
+                    material.map.flipY = false;
+                    material.needsUpdate = true;
+                  }
+                  
+                  // CRITICAL: Do NOT override the color - keep the dark MTL colors
+                  // The color should already be set correctly from the MTL Kd values
+                });
+                
+                // Update the mesh material
+                child.material = Array.isArray(child.material) ? materials : materials[0];
+                
+                child.castShadow = true;
+                child.receiveShadow = true;
+              }
+            });
+            
+            // Calculate bounding box to determine scale
+            const box = new THREE.Box3().setFromObject(object);
+            const size = box.getSize(new THREE.Vector3());
+            const maxDim = Math.max(size.x, size.y, size.z);
+            
+            // Scale to approximately match the old triangle size (0.2 radius)
+            const targetSize = 0.4;
+            const scale = targetSize / maxDim;
+            object.scale.set(scale, scale, scale);
+            
+            // Recalculate box after scaling
+            box.setFromObject(object);
+            
+            // Position model so its bottom (min Y) is at y=0
+            const min = box.min;
+            object.position.y = -min.y;
+            
+            // Center horizontally (x and z)
+            const center = box.getCenter(new THREE.Vector3());
+            object.position.x = -center.x;
+            object.position.z = -center.z;
+            
+            antModelCache = object;
+            resolve(object);
+          },
+          undefined,
+          (error) => {
+            console.error('Error loading OBJ file:', error);
+            reject(error);
+          }
+        );
+      },
+      undefined,
+      (error) => {
+        console.error('Error loading MTL file:', error);
+        // Fallback: load OBJ without MTL
+        objLoader.load(
+          './assets/desert-creatures/Ant/ant.obj',
+          (object) => {
+            object.traverse((child) => {
+              if (child.isMesh) {
+                child.material = new THREE.MeshStandardMaterial({ color: 0xffffff });
+                child.castShadow = true;
+                child.receiveShadow = true;
+              }
+            });
+            
+            const box = new THREE.Box3().setFromObject(object);
+            const size = box.getSize(new THREE.Vector3());
+            const maxDim = Math.max(size.x, size.y, size.z);
+            const targetSize = 0.4;
+            const scale = targetSize / maxDim;
+            object.scale.set(scale, scale, scale);
+            box.setFromObject(object);
+            const min = box.min;
+            object.position.y = -min.y;
+            const center = box.getCenter(new THREE.Vector3());
+            object.position.x = -center.x;
+            object.position.z = -center.z;
+            
+            antModelCache = object;
+            resolve(object);
+          },
+          undefined,
+          reject
+        );
+      }
+    );
+  });
+}
+
+/**
+ * Create an ant unit from the loaded model
  */
 function makeTriangleUnit(color) {
+  if (!antModelCache) {
+    console.error('Ant model not loaded yet. Call loadAntModel() first.');
+    // Fallback to triangle if model not loaded
   const geo = new THREE.TetrahedronGeometry(0.2, 0);
   const mat = new THREE.MeshStandardMaterial({ color });
   const mesh = new THREE.Mesh(geo, mat);
   mesh.castShadow = true;
   mesh.receiveShadow = true;
   return mesh;
+  }
+
+  // Clone the cached model (deep clone to clone materials and textures)
+  const ant = antModelCache.clone(true);
+  
+  // Apply team color as a very subtle tint while preserving dark appearance
+  ant.traverse((child) => {
+    if (child.isMesh && child.material) {
+      // Handle both single material and material arrays
+      const materials = Array.isArray(child.material) ? child.material : [child.material];
+      const clonedMaterials = materials.map(material => {
+        if (!material) return material;
+        return material.clone();
+      });
+      
+      clonedMaterials.forEach((material) => {
+        if (!material) return;
+        
+        // Clone texture if present
+        if (material.map) {
+          material.map = material.map.clone();
+          material.map.flipY = false;
+        }
+        
+        // Preserve the dark color from MTL, but apply a very subtle team color tint
+        if (material.color) {
+          // Get the current dark color
+          const currentColor = material.color.clone();
+          
+          // Apply a very subtle team color tint (95% original dark color, 5% team color)
+          // This keeps it dark but adds a hint of team color
+          const teamColor = new THREE.Color(color);
+          // Make team color darker to match the ant's dark aesthetic
+          teamColor.multiplyScalar(0.15); // Darken team color significantly
+          
+          // Blend: mostly keep the dark color, add a tiny bit of darkened team color
+          currentColor.lerp(teamColor, 0.05);
+          material.color = currentColor;
+        } else {
+          // If no color, use dark with subtle team tint
+          const darkBase = new THREE.Color(0x020202); // Very dark
+          const teamColor = new THREE.Color(color);
+          teamColor.multiplyScalar(0.15);
+          darkBase.lerp(teamColor, 0.05);
+          material.color = darkBase;
+        }
+        
+        // Ensure material properties for good shading
+        material.roughness = 0.7;
+        material.metalness = 0.1;
+      });
+      
+      // Update the mesh material
+      child.material = Array.isArray(child.material) ? clonedMaterials : clonedMaterials[0];
+    }
+  });
+  
+  return ant;
 }
 
 /**
@@ -44,6 +595,7 @@ async function loadCamelModel() {
   }
 
   return new Promise((resolve, reject) => {
+    // Use Three.js MTLLoader and OBJLoader (addons)
     const mtlLoader = new MTLLoader();
     const objLoader = new OBJLoader();
 
@@ -55,8 +607,24 @@ async function loadCamelModel() {
     mtlLoader.load(
       'DromedaryCamels.mtl',
       (materials) => {
+        // Log loaded material names for debugging
+        console.log('Camel MTL loaded. Material names:', Object.keys(materials.materials));
+        
         // Preload materials (this loads textures)
         materials.preload();
+        
+        // Verify texture loading and set color space
+        Object.keys(materials.materials).forEach((materialName) => {
+          const mtlMaterial = materials.materials[materialName];
+          if (mtlMaterial && mtlMaterial.map) {
+            console.log(`Camel texture loaded for ${materialName}:`, mtlMaterial.map.image ? 'Success' : 'Failed');
+            // Set texture color space to sRGB for correct color rendering
+            mtlMaterial.map.colorSpace = THREE.SRGBColorSpace;
+            mtlMaterial.map.flipY = false;
+          } else {
+            console.warn(`Camel material ${materialName} has no texture map`);
+          }
+        });
         
         // Set materials for OBJ loader
         objLoader.setMaterials(materials);
@@ -65,17 +633,77 @@ async function loadCamelModel() {
         objLoader.load(
           'DromedaryCamels.obj',
           (object) => {
-            // Ensure all meshes have proper material settings
+            console.log('Camel OBJ loaded. Meshes:', object.children.length);
+            
+            // Override materials with stylized low-poly material
             object.traverse((child) => {
               if (child.isMesh && child.material) {
-                // Ensure material properties are correct
-                if (child.material.map) {
-                  // Ensure texture is properly configured
-                  child.material.map.flipY = false; // OBJ textures are typically not flipped
-                  child.material.needsUpdate = true;
+                // Log per-mesh material assignment
+                const originalMaterial = Array.isArray(child.material) ? child.material[0] : child.material;
+                console.log(`Camel mesh "${child.name || 'unnamed'}" material:`, originalMaterial?.name || 'default');
+                
+                // Ensure geometry has proper normals for flat shading
+                if (child.geometry) {
+                  // Compute vertex normals if needed (flat shading will use face normals)
+                  if (!child.geometry.attributes.normal || child.geometry.attributes.normal.count === 0) {
+                    child.geometry.computeVertexNormals();
+                  }
                 }
-                // Set color to white so texture shows properly (MTL has Kd 0,0,0 which would darken)
-                child.material.color.setHex(0xffffff);
+                
+                // Handle both single material and material arrays
+                const materials = Array.isArray(child.material) ? child.material : [child.material];
+                const newMaterials = [];
+                
+                materials.forEach((material) => {
+                  if (!material) return;
+                  
+                  // Create a new stylized material for clean low-poly look
+                  const newMaterial = new THREE.MeshStandardMaterial();
+                  
+                  // Get texture from original material if it exists
+                  if (material.map) {
+                    newMaterial.map = material.map;
+                    newMaterial.map.colorSpace = THREE.SRGBColorSpace; // Ensure sRGB
+                    newMaterial.map.flipY = false;
+                    console.log(`Camel texture applied: ${material.map.image ? 'Success' : 'Failed'}`);
+                  } else {
+                    // Fallback: manually load texture if MTL didn't load it
+                    console.warn('Camel material has no texture, attempting fallback load...');
+                    const textureLoader = new THREE.TextureLoader();
+                    textureLoader.load(
+                      './assets/desert-creatures/Camel/DromedaryCamels_BaseColor.png',
+                      (texture) => {
+                        texture.colorSpace = THREE.SRGBColorSpace;
+                        texture.flipY = false;
+                        newMaterial.map = texture;
+                        newMaterial.needsUpdate = true;
+                        console.log('Camel fallback texture loaded successfully');
+                      },
+                      undefined,
+                      (error) => {
+                        console.error('Camel fallback texture load failed:', error);
+                      }
+                    );
+                  }
+                  
+                  // Set color to white so texture shows at full brightness
+                  // (MTL has Kd 0,0,0 which means it relies entirely on texture)
+                  newMaterial.color.setHex(0xffffff);
+                  
+                  // Stylized low-poly material properties
+                  newMaterial.roughness = 0.8; // Medium-high roughness for stylized look (not plastic)
+                  newMaterial.metalness = 0.0; // Non-metallic for organic look
+                  newMaterial.flatShading = true; // Enable flat shading for low-poly facet readability
+                  
+                  // Ensure proper side rendering
+                  newMaterial.side = THREE.FrontSide;
+                  
+                  newMaterials.push(newMaterial);
+                });
+                
+                // Update the mesh material
+                child.material = Array.isArray(child.material) ? newMaterials : newMaterials[0];
+                
                 child.castShadow = true;
                 child.receiveShadow = true;
               }
@@ -121,7 +749,9 @@ async function loadCamelModel() {
         textureLoader.load(
           './assets/desert-creatures/Camel/DromedaryCamels_BaseColor.png',
           (texture) => {
+            texture.colorSpace = THREE.SRGBColorSpace;
             texture.flipY = false;
+            console.log('Camel fallback texture loaded');
             objLoader.load(
               './assets/desert-creatures/Camel/DromedaryCamels.obj',
               (object) => {
@@ -129,7 +759,10 @@ async function loadCamelModel() {
                   if (child.isMesh) {
                     child.material = new THREE.MeshStandardMaterial({
                       map: texture,
-                      color: 0xffffff
+                      color: 0xffffff,
+                      roughness: 0.8,
+                      metalness: 0.0,
+                      flatShading: true // Low-poly facet readability
                     });
                     child.castShadow = true;
                     child.receiveShadow = true;
@@ -171,38 +804,66 @@ function makeSphereUnit(color) {
   if (!camelModelCache) {
     console.error('Camel model not loaded yet. Call loadCamelModel() first.');
     // Fallback to sphere if model not loaded
-    const geo = new THREE.SphereGeometry(0.2, 12, 12);
-    const mat = new THREE.MeshStandardMaterial({ color });
-    const mesh = new THREE.Mesh(geo, mat);
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
-    return mesh;
+  const geo = new THREE.SphereGeometry(0.2, 12, 12);
+  const mat = new THREE.MeshStandardMaterial({ color });
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  return mesh;
   }
 
   // Clone the cached model (deep clone to clone materials and textures)
   const camel = camelModelCache.clone(true);
   
-  // Apply team color as a very subtle tint to the materials
+  // Apply team color as a very subtle tint while preserving material properties
   camel.traverse((child) => {
     if (child.isMesh && child.material) {
-      // Clone material to avoid affecting other instances
-      child.material = child.material.clone();
+      // Handle both single material and material arrays
+      const materials = Array.isArray(child.material) ? child.material : [child.material];
+      const clonedMaterials = materials.map(material => {
+        if (!material) return material;
+        const cloned = material.clone();
+        
+        // Preserve flat shading for low-poly look
+        if (material.flatShading !== undefined) {
+          cloned.flatShading = material.flatShading;
+        }
+        
+        // Clone texture if present and ensure sRGB color space
+        if (material.map) {
+          cloned.map = material.map.clone();
+          cloned.map.colorSpace = THREE.SRGBColorSpace;
+          cloned.map.flipY = false;
+        }
+        
+        return cloned;
+      });
       
-      // If material has a texture, ensure it's cloned and visible
-      if (child.material.map) {
-        // Clone texture to avoid sharing
-        child.material.map = child.material.map.clone();
-        // Set color to white so texture shows at full brightness
-        // (MTL file has Kd 0,0,0 which would darken the texture)
-        child.material.color.setHex(0xffffff);
-        // Apply very subtle team color tint (98% white, 2% team color)
-        const teamColor = new THREE.Color(color);
-        teamColor.lerp(new THREE.Color(0xffffff), 0.98);
-        child.material.color.multiply(teamColor);
-      } else {
-        // If no texture, set the color directly
-        child.material.color = new THREE.Color(color);
-      }
+      clonedMaterials.forEach((material) => {
+        if (!material) return;
+        
+        // If material has a texture, ensure it's visible with subtle team tint
+        if (material.map) {
+          // Set color to white so texture shows at full brightness
+          // (MTL file has Kd 0,0,0 which would darken the texture)
+          material.color.setHex(0xffffff);
+          // Apply very subtle team color tint (98% white, 2% team color)
+          const teamColor = new THREE.Color(color);
+          teamColor.lerp(new THREE.Color(0xffffff), 0.98);
+          material.color.multiply(teamColor);
+        } else {
+          // If no texture, set the color directly
+          material.color = new THREE.Color(color);
+        }
+        
+        // Ensure material properties are preserved
+        material.roughness = material.roughness ?? 0.8;
+        material.metalness = material.metalness ?? 0.0;
+        material.flatShading = material.flatShading ?? true;
+      });
+      
+      // Update the mesh material
+      child.material = Array.isArray(child.material) ? clonedMaterials : clonedMaterials[0];
     }
   });
   
@@ -262,7 +923,7 @@ function createTeamUnits(scene, terrain, teamId, startRow, startCol, geometryTyp
   const geometryMap = {
     'sphere': { create: makeSphereUnit, yOffset: 0.05, type: 'sphere' }, // Camel model (feet at y=0)
     'cube': { create: makeCubeUnit, yOffset: 0.15, type: 'cube' },
-    'triangle': { create: makeTriangleUnit, yOffset: 0.1, type: 'triangle' },
+    'triangle': { create: makeTriangleUnit, yOffset: 0.05, type: 'triangle' }, // Ant model (bottom at y=0)
   };
   
   const geometry = geometryMap[geometryType];
@@ -311,16 +972,20 @@ function createTeamUnits(scene, terrain, teamId, startRow, startCol, geometryTyp
 
 /**
  * Spawn all teams on the terrain
- * Team 1: camel (replaces sphere), Team 2: cube, Team 3: triangle
+ * Team 1: camel (replaces sphere), Team 2: cube, Team 3: ant (replaces triangle)
  */
 export async function spawnTeams(scene, terrain) {
-  // Load camel model before creating units
-  await loadCamelModel();
+  // Load models before creating units
+  await Promise.all([
+    loadCamelModel(),
+    loadAntModel(),
+    loadCobraModel()
+  ]);
   
   const teams = {
     team1: createTeamUnits(scene, terrain, 'team1', 2, 2, 'sphere'),      // Top-left: camel (sphere type)
     team2: createTeamUnits(scene, terrain, 'team2', 2, 13, 'cube'),     // Top-right: cube
-    team3: createTeamUnits(scene, terrain, 'team3', 13, 2, 'triangle'), // Bottom-left: triangle
+    team3: createTeamUnits(scene, terrain, 'team3', 13, 2, 'triangle'), // Bottom-left: ant (triangle type)
   };
   
   return teams;

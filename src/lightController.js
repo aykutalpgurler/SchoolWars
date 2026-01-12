@@ -1,10 +1,13 @@
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
 
 export function setupLights(scene) {
-  const hemi = new THREE.HemisphereLight(0x8fd3ff, 0x224466, 0.45);
+  // Reduced hemisphere light intensity to avoid flattening colors
+  // Keep it subtle for better contrast and shading
+  const hemi = new THREE.HemisphereLight(0x8fd3ff, 0x224466, 0.3);
   scene.add(hemi);
 
-  const directional = new THREE.DirectionalLight(0xffffff, 0.75);
+  // Main directional light - key light for good shading
+  const directional = new THREE.DirectionalLight(0xffffff, 0.85);
   directional.position.set(10, 18, 8);
   directional.castShadow = true;
   directional.shadow.mapSize.set(2048, 2048);
@@ -15,6 +18,11 @@ export function setupLights(scene) {
   directional.shadow.camera.top = 30;
   directional.shadow.camera.bottom = -30;
   scene.add(directional);
+  
+  // Add a subtle fill light for better visibility without flattening
+  const fillLight = new THREE.DirectionalLight(0xffffff, 0.25);
+  fillLight.position.set(-8, 10, -6);
+  scene.add(fillLight);
 
   const spotlight = new THREE.SpotLight(0xfff3c4, 2.0, 50, THREE.MathUtils.degToRad(30), 0.2, 1.5);
   spotlight.position.set(6, 14, 6);

@@ -12,6 +12,11 @@ renderer.setPixelRatio(window.devicePixelRatio);
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setClearColor(0x1b2b4f);
 renderer.shadowMap.enabled = true;
+// Set output color space to sRGB for correct color rendering
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+// Set tone mapping for better exposure
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.0;
 appEl.appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
