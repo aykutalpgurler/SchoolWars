@@ -33,9 +33,8 @@ export class GameLogic {
   }
 
   issueMove(units, target) {
-    // Only allow moving cube units (team2)
-    const cubeUnits = units.filter(unit => unit.userData.type === 'cube' && unit.userData.team === 'team2');
-    cubeUnits.forEach(unit => {
+    // Allow moving all units (player and AI controlled)
+    units.forEach(unit => {
       const path = computePath({
         start: unit.position.clone(),
         target: target.clone(),
@@ -85,10 +84,10 @@ export class GameLogic {
 
   update(dt) {
     // Move units along paths FIRST
-    // Only move cube units (team2) - other units are controlled by AI
-    const cubeUnits = (this.teams.team2 || []).filter(unit => unit.userData.type === 'cube');
+    // Process all units from all teams
+    const allUnits = Object.values(this.teams).flat();
     const unitsThatFinished = [];
-    cubeUnits.forEach(unit => {
+    allUnits.forEach(unit => {
       const path = this.unitPaths.get(unit.uuid);
       if (path && path.length > 0) {
         const done = stepAlongPath(unit, dt, path);
@@ -124,10 +123,20 @@ export class GameLogic {
       this.spawnTimer = 0;
 
       Object.keys(TEAM_BASES).forEach((teamId) => {
-        const unit = spawnUnitAtBase(this.scene, this.terrain, teamId);
-        if (unit) {
-          if (!this.teams[teamId]) this.teams[teamId] = [];
-          this.teams[teamId].push(unit);
+        // Check if friendly units are on spawn grid for faster spawning
+        const base = TEAM_BASES[teamId];
+        const spawnCell = this.terrain.getCell(base.startRow, base.startCol);
+        const hasFriendlyOnSpawn = spawnCell && spawnCell.units.some(u => u.userData.team === teamId);
+        
+        // Spawn additional unit if friendly units are on spawn
+        const spawnCount = hasFriendlyOnSpawn ? 2 : 1;
+        
+        for (let i = 0; i < spawnCount; i++) {
+          const unit = spawnUnitAtBase(this.scene, this.terrain, teamId);
+          if (unit) {
+            if (!this.teams[teamId]) this.teams[teamId] = [];
+            this.teams[teamId].push(unit);
+          }
         }
       });
     }
@@ -149,25 +158,41 @@ export class GameLogic {
     allUnits.forEach(unit => {
       const cell = this.terrain.getCellFromWorldPos(unit.position.x, unit.position.z);
       if (cell && cell.type === 'buff') {
-        unitsOnBuffGrids.set(unit.uuid, cell);
+        unitsOnBuffGrids.set(unit.uuid, { cell, team: unit.userData.team });
       }
     });
     
     // Update timers for units on buff grids
-    unitsOnBuffGrids.forEach((cell, unitUuid) => {
+    unitsOnBuffGrids.forEach(({ cell, team }, unitUuid) => {
       const existing = this.unitBuffTimers.get(unitUuid);
       if (existing && existing.cell === cell) {
         // Same cell, increment timer
         existing.time += dt;
         
-        // Activate buff if timer reaches threshold
-        if (existing.time >= this.buffActivationTime && !this.spawnSpeedBuffActive) {
-          this.spawnSpeedBuffActive = true;
-          console.log('Spawn speed buff activated! Spawn time reduced from 10s to 9s');
+        // Capture buff grid if timer reaches threshold
+        if (existing.time >= this.buffActivationTime) {
+          // Change buff grid color to team color and mark as owned
+          if (cell.owner !== team) {
+            cell.owner = team;
+            const TEAM_COLORS = {
+              team1: 0x7c3aed, // Purple
+              team2: 0x22c55e, // Green
+              team3: 0xfacc15, // Yellow
+            };
+            if (cell.mesh && TEAM_COLORS[team]) {
+              cell.mesh.material.color.setHex(TEAM_COLORS[team]);
+            }
+            console.log(`${team} captured a buff grid!`);
+          }
+          
+          if (!this.spawnSpeedBuffActive) {
+            this.spawnSpeedBuffActive = true;
+            console.log('Spawn speed buff activated! Spawn time reduced from 10s to 9s');
+          }
         }
       } else {
         // New cell or different cell, start timer
-        this.unitBuffTimers.set(unitUuid, { cell, time: dt });
+        this.unitBuffTimers.set(unitUuid, { cell, time: dt, team });
       }
     });
     
