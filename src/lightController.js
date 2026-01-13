@@ -24,5 +24,127 @@ export function setupLights(scene) {
   fillLight.position.set(-8, 10, -6);
   scene.add(fillLight);
 
-  return { directional };
+  // User-controllable spotlight with 6 DOF
+  const spotlight = new THREE.SpotLight(0xffffff, 0); // Start with intensity 0 (off)
+  spotlight.position.set(10, 15, 10);
+  spotlight.angle = Math.PI / 6; // 30 degrees
+  spotlight.penumbra = 0.3;
+  spotlight.decay = 2;
+  spotlight.distance = 100;
+  spotlight.castShadow = true;
+  spotlight.shadow.mapSize.width = 2048;
+  spotlight.shadow.mapSize.height = 2048;
+  spotlight.shadow.camera.near = 0.5;
+  spotlight.shadow.camera.far = 100;
+  spotlight.shadow.bias = -0.0001;
+  
+  // Spotlight target (where it points)
+  const spotlightTarget = new THREE.Object3D();
+  spotlightTarget.position.set(0, 0, 0);
+  scene.add(spotlightTarget);
+  spotlight.target = spotlightTarget;
+  scene.add(spotlight);
+
+  // Store original light intensities for debug mode restoration
+  const originalIntensities = {
+    hemi: hemi.intensity,
+    directional: directional.intensity,
+    fill: fillLight.intensity
+  };
+
+  // Spotlight helpers for visualization
+  const spotHelper = new THREE.SpotLightHelper(spotlight);
+  spotHelper.visible = false;
+  scene.add(spotHelper);
+
+  const spotCamHelper = new THREE.CameraHelper(spotlight.shadow.camera);
+  spotCamHelper.visible = false;
+  scene.add(spotCamHelper);
+
+  // Helper function to update spotlight rotation from Euler angles
+  function updateSpotlightRotation(pitch, yaw, roll) {
+    // Create rotation quaternion from Euler angles
+    const euler = new THREE.Euler(
+      THREE.MathUtils.degToRad(pitch),
+      THREE.MathUtils.degToRad(yaw),
+      THREE.MathUtils.degToRad(roll),
+      'XYZ'
+    );
+    const quaternion = new THREE.Quaternion().setFromEuler(euler);
+    
+    // Calculate target position relative to spotlight position
+    // Use -Z as forward direction (Three.js convention)
+    const direction = new THREE.Vector3(0, 0, -1);
+    direction.applyQuaternion(quaternion);
+    direction.multiplyScalar(10); // Distance to target
+    
+    spotlightTarget.position.copy(spotlight.position).add(direction);
+    
+    // Update matrix worlds to ensure helpers update correctly
+    spotlight.updateMatrixWorld(true);
+    spotlightTarget.updateMatrixWorld(true);
+  }
+
+  // Initialize with default rotation (pointing down and slightly forward)
+  updateSpotlightRotation(-45, 0, 0);
+
+  // Debug mode: 0=Normal, 1=Spotlight Only, 2=Low Ambient
+  let debugMode = 0;
+  
+  // Expose debug mode getter for day/night cycle check
+  function getSpotlightDebugMode() {
+    return debugMode;
+  }
+
+  function setSpotlightDebugMode(mode) {
+    debugMode = mode;
+    
+    if (mode === 0) {
+      // Normal mode - restore original intensities
+      hemi.intensity = originalIntensities.hemi;
+      directional.intensity = originalIntensities.directional;
+      fillLight.intensity = originalIntensities.fill;
+    } else if (mode === 1) {
+      // Spotlight Only - turn off all other lights
+      hemi.intensity = 0;
+      directional.intensity = 0;
+      fillLight.intensity = 0;
+    } else if (mode === 2) {
+      // Low Ambient - reduce other lights, emphasize spotlight
+      hemi.intensity = originalIntensities.hemi * 0.1;
+      directional.intensity = originalIntensities.directional * 0.1;
+      fillLight.intensity = 0;
+    }
+  }
+
+  function toggleSpotlightHelpers(visible) {
+    spotHelper.visible = visible;
+    spotCamHelper.visible = visible;
+    if (visible) {
+      // Update helpers when showing
+      spotHelper.update();
+      spotCamHelper.update();
+    }
+  }
+
+  function updateSpotlightHelpers() {
+    if (spotHelper.visible) {
+      spotHelper.update();
+    }
+    if (spotCamHelper.visible) {
+      spotCamHelper.update();
+    }
+  }
+
+  return { 
+    directional,
+    spotlight,
+    spotlightTarget,
+    updateSpotlightRotation,
+    setSpotlightDebugMode,
+    getSpotlightDebugMode,
+    toggleSpotlightHelpers,
+    updateSpotlightHelpers,
+    originalIntensities
+  };
 }

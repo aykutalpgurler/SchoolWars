@@ -133,6 +133,79 @@
       font-variant-numeric: tabular-nums;
       font-size: 11px;
     }
+    .spotlight-panel {
+      position: absolute;
+      left: 12px;
+      bottom: 12px;
+      width: 300px;
+      background: rgba(0, 0, 0, 0.75);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 10px;
+      padding: 12px 14px;
+      font-size: 12px;
+      line-height: 1.4;
+      display: none;
+      backdrop-filter: blur(6px);
+      pointer-events: auto;
+      max-height: 80vh;
+      overflow-y: auto;
+    }
+    .spotlight-panel.visible {
+      display: block;
+    }
+    .spotlight-panel .title {
+      font-weight: 700;
+      margin-bottom: 8px;
+      color: #fbbf24;
+      font-size: 13px;
+    }
+    .spotlight-panel .section {
+      margin: 12px 0;
+      padding-top: 8px;
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    .spotlight-panel .section-title {
+      font-weight: 600;
+      margin-bottom: 6px;
+      color: #fcd34d;
+      font-size: 12px;
+    }
+    .spotlight-panel .shader-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin: 6px 0;
+    }
+    .spotlight-panel .shader-row label {
+      color: #e5e7eb;
+      font-size: 11px;
+      min-width: 60px;
+    }
+    .spotlight-panel .shader-row input[type="range"] {
+      flex: 1;
+    }
+    .spotlight-panel .shader-row input[type="checkbox"] {
+      margin-left: auto;
+    }
+    .spotlight-panel .shader-value {
+      width: 48px;
+      text-align: right;
+      color: #9ca3af;
+      font-variant-numeric: tabular-nums;
+      font-size: 11px;
+    }
+    .spotlight-panel .info-line {
+      margin: 4px 0;
+      color: #e5e7eb;
+      font-size: 11px;
+    }
+    .spotlight-panel .label {
+      color: #9ca3af;
+    }
+    .spotlight-panel .value {
+      color: #fbbf24;
+    }
     .debug-panel {
       position: absolute;
       top: 12px;
@@ -189,6 +262,8 @@
       <li>Move units: Right-click ground</li>
       <li>Shader effects: G to cycle (None / Cel-Toon / Chromatic Aberration)</li>
       <li>Shader debug panel: T to toggle</li>
+      <li>Spotlight control panel: L to toggle</li>
+      <li>Spotlight helpers: K to toggle</li>
       <li>Axis select: X/Y/Z (translate axis), Shift+X/Y/Z (rotate axis)</li>
       <li>Transform selection: C/V translate ± along axis; R/F rotate ±</li>
       <li>Name area flythrough: N (go/return)</li>
@@ -222,6 +297,111 @@
         <input type="range" id="chromDistortionStrength" min="0" max="1.0" step="0.01" value="0.3" />
         <div class="shader-value" id="chromDistortionStrengthValue">0.30</div>
       </div>
+    </div>
+  </div>
+  <div class="spotlight-panel" id="spotlightPanel">
+    <div class="title">Spotlight Control Panel (L to toggle)</div>
+    <div class="section">
+      <div class="section-title">Position</div>
+      <div class="shader-row">
+        <label for="spotlightPosX">X</label>
+        <input type="range" id="spotlightPosX" min="-50" max="50" step="0.1" value="10" />
+        <div class="shader-value" id="spotlightPosXValue">10.0</div>
+      </div>
+      <div class="shader-row">
+        <label for="spotlightPosY">Y</label>
+        <input type="range" id="spotlightPosY" min="0" max="50" step="0.1" value="15" />
+        <div class="shader-value" id="spotlightPosYValue">15.0</div>
+      </div>
+      <div class="shader-row">
+        <label for="spotlightPosZ">Z</label>
+        <input type="range" id="spotlightPosZ" min="-50" max="50" step="0.1" value="10" />
+        <div class="shader-value" id="spotlightPosZValue">10.0</div>
+      </div>
+    </div>
+    <div class="section">
+      <div class="section-title">Rotation (degrees)</div>
+      <div class="shader-row">
+        <label for="spotlightRotX">Pitch (X)</label>
+        <input type="range" id="spotlightRotX" min="-180" max="180" step="1" value="-45" />
+        <div class="shader-value" id="spotlightRotXValue">-45</div>
+      </div>
+      <div class="shader-row">
+        <label for="spotlightRotY">Yaw (Y)</label>
+        <input type="range" id="spotlightRotY" min="-180" max="180" step="1" value="0" />
+        <div class="shader-value" id="spotlightRotYValue">0</div>
+      </div>
+      <div class="shader-row">
+        <label for="spotlightRotZ">Roll (Z)</label>
+        <input type="range" id="spotlightRotZ" min="-180" max="180" step="1" value="0" />
+        <div class="shader-value" id="spotlightRotZValue">0</div>
+      </div>
+    </div>
+    <div class="section">
+      <div class="section-title">Properties</div>
+      <div class="shader-row">
+        <label for="spotlightIntensity">Intensity</label>
+        <input type="range" id="spotlightIntensity" min="0" max="50" step="0.1" value="15" />
+        <div class="shader-value" id="spotlightIntensityValue">15.0</div>
+      </div>
+      <div class="shader-row">
+        <label for="spotlightAngle">Angle (deg)</label>
+        <input type="range" id="spotlightAngle" min="5" max="60" step="1" value="30" />
+        <div class="shader-value" id="spotlightAngleValue">30</div>
+      </div>
+      <div class="shader-row">
+        <label for="spotlightPenumbra">Penumbra</label>
+        <input type="range" id="spotlightPenumbra" min="0" max="1" step="0.01" value="0.3" />
+        <div class="shader-value" id="spotlightPenumbraValue">0.30</div>
+      </div>
+      <div class="shader-row">
+        <label for="spotlightDistance">Distance</label>
+        <input type="range" id="spotlightDistance" min="0" max="200" step="1" value="100" />
+        <div class="shader-value" id="spotlightDistanceValue">100</div>
+      </div>
+      <div class="shader-row">
+        <label for="spotlightDecay">Decay</label>
+        <input type="range" id="spotlightDecay" min="0" max="2" step="0.1" value="2.0" />
+        <div class="shader-value" id="spotlightDecayValue">2.0</div>
+      </div>
+      <div class="shader-row">
+        <label for="spotlightEnabled">Enabled</label>
+        <input type="checkbox" id="spotlightEnabled" />
+      </div>
+    </div>
+    <div class="section">
+      <div class="section-title">Debug Tools</div>
+      <div class="shader-row">
+        <label for="spotlightShowHelpers">Show Helpers</label>
+        <input type="checkbox" id="spotlightShowHelpers" />
+      </div>
+      <div class="shader-row">
+        <label for="spotlightDebugMode">Debug Mode</label>
+        <select id="spotlightDebugMode" style="flex: 1; margin-left: 8px; padding: 2px;">
+          <option value="0">Normal</option>
+          <option value="1">Spotlight Only</option>
+          <option value="2">Low Ambient</option>
+        </select>
+      </div>
+      <div class="shader-row">
+        <label for="spotlightForceLit">Force Lit Materials</label>
+        <input type="checkbox" id="spotlightForceLit" />
+      </div>
+      <div class="shader-row">
+        <label for="spotlightForceShadows">Enable Shadows On All</label>
+        <input type="checkbox" id="spotlightForceShadows" />
+      </div>
+      <div class="shader-row">
+        <label for="spotlightBypassPostFX">Bypass PostFX</label>
+        <input type="checkbox" id="spotlightBypassPostFX" />
+      </div>
+    </div>
+    <div class="section">
+      <div class="section-title">Current Values</div>
+      <div class="info-line"><span class="label">Position:</span> <span class="value" id="spotlightCurrentPos">(10.0, 15.0, 10.0)</span></div>
+      <div class="info-line"><span class="label">Rotation:</span> <span class="value" id="spotlightCurrentRot">(-45°, 0°, 0°)</span></div>
+      <div class="info-line"><span class="label">Intensity:</span> <span class="value" id="spotlightCurrentIntensity">0.0</span></div>
+      <div class="info-line" id="spotlightDiagnosticInfo" style="margin-top: 6px; font-size: 10px; color: #9ca3af;"></div>
     </div>
   </div>
   <script type="module" src="./src/main.js"></script>
