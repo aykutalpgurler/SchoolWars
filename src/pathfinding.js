@@ -135,6 +135,20 @@ export function computePath({ start, target, terrain }) {
 
 export function stepAlongPath(unit, dt, path, speed = 5.0) {
   if (!path || path.length === 0) return true;
+  
+  // Stop moving if unit is close to their attack target
+  if (unit.userData._attackTarget) {
+    const attackTarget = unit.userData._attackTarget;
+    const dx = attackTarget.position.x - unit.position.x;
+    const dz = attackTarget.position.z - unit.position.z;
+    const distToTarget = Math.sqrt(dx * dx + dz * dz);
+    
+    // Stop moving when within attack range (1.5 to give some buffer)
+    if (distToTarget < 1.5) {
+      return false; // Don't finish path, just stop moving
+    }
+  }
+  
   const target = path[0];
   
   // Calculate distance only in X/Z plane (ignore Y since collision system handles it)

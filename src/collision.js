@@ -175,6 +175,13 @@ export class GridCollisionSystem {
 
         if (!aData.intersects(bData)) continue;
 
+        // Check if units are in combat with each other - skip push if they are
+        const aAttackingB = a.userData._attackTarget === b;
+        const bAttackingA = b.userData._attackTarget === a;
+        if (aAttackingB || bAttackingA) {
+          continue; // Don't push units that are fighting
+        }
+
         // Basic separation along XZ: push units slightly apart
         this._tmpVec.subVectors(a.position, b.position);
         // Avoid zero-length vector
@@ -184,7 +191,7 @@ export class GridCollisionSystem {
         this._tmpVec.y = 0;
         this._tmpVec.normalize();
 
-        const pushDistance = 0.05; // tweak for how strong the separation feels
+        const pushDistance = 0.05;
         a.position.addScaledVector(this._tmpVec, pushDistance * 0.5);
         b.position.addScaledVector(this._tmpVec, -pushDistance * 0.5);
       }

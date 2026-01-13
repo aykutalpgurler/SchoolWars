@@ -928,7 +928,7 @@ function attachHealthBar(visual, unitData) {
   const barGroup = new THREE.Group();
 
   let width = 1;  // Wider for all units
-  let height = 0.25; // Longer for all units
+  let height = 0.18; // Longer for all units
 
  
 
@@ -1043,6 +1043,15 @@ export function updateHealthBarVisual(visual) {
   hb.fg.scale.x = frac;
   hb.fg.position.x = -(1 - frac) * (hb.width / 2);
   hb.group.visible = !unitData.isDead;
+  
+  // Change color based on health percentage
+  if (frac < 0.5) {
+    // Below 50%: dark yellow
+    hb.fg.material.color.setHex(0xccaa00);
+  } else {
+    // Above 50%: green
+    hb.fg.material.color.setHex(0x0dd101);
+  }
 }
 
 /**

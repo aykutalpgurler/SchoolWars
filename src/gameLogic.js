@@ -46,6 +46,9 @@ export class GameLogic {
       // Clear any stuck state when issuing a new move
       unit.userData._lastDist = undefined;
       unit.userData._stuckTime = 0;
+      // Clear attack target so unit can move freely
+      unit.userData._attackTarget = null;
+      unit.userData._attackCooldown = 0;
     });
   }
 

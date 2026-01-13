@@ -3,12 +3,12 @@ import { buildTerrain } from './terrain.js';
 import { spawnTeams, TEAM_BASES } from './units.js';
 
 /**
- * Create buff grids (5-8 blue cells that provide spawn speed buffs)
+ * Create buff grids (15 blue cells that provide spawn speed buffs)
  * Places them randomly but avoids spawn cells and edges
  */
 function createBuffGrids(terrain) {
   const buffGrids = [];
-  const numBuffGrids = 5 + Math.floor(Math.random() * 4); // 5-8 buff grids
+  const numBuffGrids = 15; // 15 buff grids
   const spawnCells = new Set();
   
   // Mark spawn cells as off-limits
