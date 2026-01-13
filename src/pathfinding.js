@@ -133,7 +133,7 @@ export function computePath({ start, target, terrain }) {
   return [fallbackTarget];
 }
 
-export function stepAlongPath(unit, dt, path, speed = 5.0) {
+export function stepAlongPath(unit, dt, path, speed = 2.0) {
   if (!path || path.length === 0) return true;
   
   // Stop moving if unit is close to their attack target

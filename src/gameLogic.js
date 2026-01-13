@@ -52,15 +52,14 @@ export class GameLogic {
   }
 
   /**
-   * Issue an attack order: selected player units (team2 cubes) move toward an enemy
+   * Issue an attack order: selected units move toward an enemy
    * and will attack when in range.
    */
   issueAttack(units, target) {
     if (!target) return;
 
-    // Only allow issuing orders for player-controlled cube units (team2)
-    const cubeUnits = units.filter(unit => unit.userData.type === 'cube' && unit.userData.team === 'team2');
-    cubeUnits.forEach(unit => {
+    // Allow all units to attack (not just player units)
+    units.forEach(unit => {
       const path = computePath({
         start: unit.position.clone(),
         target: target.position.clone(),
@@ -75,8 +74,8 @@ export class GameLogic {
     });
 
     // Ensure the enemy will fight back the closest attacker
-    if (cubeUnits.length > 0) {
-      const attacker = cubeUnits[0];
+    if (units.length > 0) {
+      const attacker = units[0];
       target.userData._attackTarget = attacker;
       target.userData._attackCooldown = 0;
     }

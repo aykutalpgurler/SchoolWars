@@ -32,7 +32,12 @@ export function runAI(game) {
     const units = game.teams[teamId] || [];
     if (units.length === 0) return;
     
-    // Check for spawn defense (highest priority)
+    // Check for nearby enemies and engage in combat (highest priority)
+    if (engageNearbyEnemies(game, teamId, units)) {
+      return; // Fighting enemies, skip other strategies
+    }
+    
+    // Check for spawn defense (second priority)
     if (checkSpawnDefense(game, teamId, units)) {
       return; // Defending spawn, skip other strategies
     }
@@ -44,6 +49,49 @@ export function runAI(game) {
     // Execute current strategy
     executeStrategy(game, teamId, units, state);
   });
+}
+
+/**
+ * Engage nearby enemies with combat orders
+ * Returns true if any units were engaged in combat
+ */
+function engageNearbyEnemies(game, teamId, units) {
+  const ENGAGEMENT_RANGE = 3.0; // Range to detect and attack enemies
+  let engaged = false;
+  
+  // Check each unit for nearby enemies
+  units.forEach(unit => {
+    // Skip if already attacking
+    if (unit.userData._attackTarget) return;
+    
+    // Find all enemy units
+    const enemies = [];
+    Object.entries(game.teams).forEach(([otherTeamId, otherUnits]) => {
+      if (otherTeamId !== teamId) {
+        enemies.push(...otherUnits);
+      }
+    });
+    
+    // Find closest enemy within engagement range
+    let closestEnemy = null;
+    let closestDist = ENGAGEMENT_RANGE;
+    
+    enemies.forEach(enemy => {
+      const dist = unit.position.distanceTo(enemy.position);
+      if (dist < closestDist) {
+        closestDist = dist;
+        closestEnemy = enemy;
+      }
+    });
+    
+    // Attack closest enemy if found
+    if (closestEnemy) {
+      game.issueAttack([unit], closestEnemy);
+      engaged = true;
+    }
+  });
+  
+  return engaged;
 }
 
 /**
