@@ -2,6 +2,7 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.m
 // Import Three.js loaders (addons) - using CDN path for examples/jsm/loaders
 import { OBJLoader } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/loaders/OBJLoader.js';
 import { MTLLoader } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/loaders/MTLLoader.js';
+import { Unit } from './unit.js';
 
 const TEAM_COLORS = {
   team1: 0x7c3aed, // Purple
@@ -912,62 +913,115 @@ function getTerrainHeightAt(scene, worldX, worldZ, cell) {
   return cell ? cell.getY() * heightScale : 0;
 }
 
+// Map geometry type to creator function and properties
+const GEOMETRY_MAP = {
+  sphere: { create: makeSphereUnit, yOffset: 0.2, type: 'sphere' }, // Camel
+  cube: { create: makeCubeUnit, yOffset: 0.6, type: 'cube' }, // Cobra
+  triangle: { create: makeTriangleUnit, yOffset: 0.2, type: 'triangle' }, // Ant
+};
+
 /**
  * Create units for a team and place them on terrain vertex grids
  */
 function createTeamUnits(scene, terrain, teamId, startRow, startCol, geometryType) {
   const units = [];
   const color = TEAM_COLORS[teamId];
-  
-  // Map geometry type to creator function and properties
-  const geometryMap = {
-    'sphere': { create: makeSphereUnit, yOffset: 0.2, type: 'sphere' }, // Camel model (feet at y=0) - increased yOffset for larger model
-    'cube': { create: makeCubeUnit, yOffset: 0.6, type: 'cube' }, // Increased yOffset for larger cobra model
-    'triangle': { create: makeTriangleUnit, yOffset: 0.2, type: 'triangle' }, // Ant model (bottom at y=0) - increased yOffset for larger model
-  };
-  
-  const geometry = geometryMap[geometryType];
+
+  const geometry = GEOMETRY_MAP[geometryType];
   if (!geometry) return units;
-  
+
   // Place 3 units on different grid cells
   const offsets = [
-    { row: 0, col: 0 },  // Starting cell
-    { row: 0, col: 1 },  // One cell right
-    { row: 1, col: 0 },  // One cell down
+    { row: 0, col: 0 }, // Starting cell
+    { row: 0, col: 1 }, // One cell right
+    { row: 1, col: 0 }, // One cell down
   ];
-  
+
   offsets.forEach((offset) => {
     const cellRow = startRow + offset.row;
     const cellCol = startCol + offset.col;
     const cell = terrain.getCell(cellRow, cellCol);
-    
+
     if (cell) {
-      const unit = geometry.create(color);
-      
+      const visual = geometry.create(color);
+
+      // Attach logical Unit data (health, speed, collider) to the visual object
+      const unitData = new Unit({
+        maxHealth: 100,
+        team: teamId,
+        type: geometry.type,
+        speed: 2.0,
+      });
+      unitData.bindObject(visual);
+
+      // Expose unit data via userData while keeping existing fields
+      visual.userData.unit = unitData;
+
       // Use raycasting to find exact terrain height at this position
       const terrainHeight = getTerrainHeightAt(scene, cell.x, cell.z, cell);
-      
+
       // Place unit on the terrain surface
-      unit.position.set(cell.x, terrainHeight + geometry.yOffset, cell.z);
-      
-      unit.userData = {
+      visual.position.set(cell.x, terrainHeight + geometry.yOffset, cell.z);
+
+      visual.userData = {
+        ...(visual.userData || {}),
         team: teamId,
-        cell: cell,
+        cell,
         currentCell: cell, // Track current grid cell for collision
         type: geometry.type,
       };
-      
+
       // Add unit to cell's units array
-      if (cell) {
-        cell.addUnit(unit);
-      }
-      
-      scene.add(unit);
-      units.push(unit);
+      cell.addUnit(visual);
+
+      scene.add(visual);
+      units.push(visual);
     }
   });
-  
+
   return units;
+}
+
+/**
+ * Spawn a single unit at a team's base cell (no offsets), used for periodic spawning.
+ */
+export function spawnUnitAtBase(scene, terrain, teamId) {
+  const base = TEAM_BASES[teamId];
+  if (!base) return null;
+
+  const color = TEAM_COLORS[teamId];
+  const geometry = GEOMETRY_MAP[base.geometryType];
+  if (!geometry) return null;
+
+  const cell = terrain.getCell(base.startRow, base.startCol);
+  if (!cell) return null;
+
+  const visual = geometry.create(color);
+
+  // Attach logical Unit data
+  const unitData = new Unit({
+    maxHealth: 100,
+    team: teamId,
+    type: geometry.type,
+    speed: 2.0,
+  });
+  unitData.bindObject(visual);
+
+  const terrainHeight = getTerrainHeightAt(scene, cell.x, cell.z, cell);
+  visual.position.set(cell.x, terrainHeight + geometry.yOffset, cell.z);
+
+  visual.userData = {
+    ...(visual.userData || {}),
+    team: teamId,
+    cell,
+    currentCell: cell,
+    type: geometry.type,
+  };
+
+  cell.addUnit(visual);
+  scene.add(visual);
+
+  return visual;
 }
 
 /**
@@ -981,12 +1035,31 @@ export async function spawnTeams(scene, terrain) {
     loadAntModel(),
     loadCobraModel()
   ]);
-  
+
   const teams = {
-    team1: createTeamUnits(scene, terrain, 'team1', 2, 2, 'sphere'),      // Top-left: camel (sphere type)
-    team2: createTeamUnits(scene, terrain, 'team2', 2, 13, 'cube'),     // Top-right: cube
-    team3: createTeamUnits(scene, terrain, 'team3', 13, 2, 'triangle'), // Bottom-left: ant (triangle type)
+    team1: createTeamUnits(scene, terrain, 'team1', TEAM_BASES.team1.startRow, TEAM_BASES.team1.startCol, TEAM_BASES.team1.geometryType),
+    team2: createTeamUnits(scene, terrain, 'team2', TEAM_BASES.team2.startRow, TEAM_BASES.team2.startCol, TEAM_BASES.team2.geometryType),
+    team3: createTeamUnits(scene, terrain, 'team3', TEAM_BASES.team3.startRow, TEAM_BASES.team3.startCol, TEAM_BASES.team3.geometryType),
   };
-  
+
+  // Mark base cells as spawn type and tint with team colors
+  Object.entries(TEAM_BASES).forEach(([id, base]) => {
+    const cell = terrain.getCell(base.startRow, base.startCol);
+    if (cell) {
+      cell.setType('spawn');
+      if (cell.mesh && cell.mesh.material) {
+        cell.mesh.material.color.setHex(TEAM_COLORS[id]);
+        cell.mesh.material.needsUpdate = true;
+      }
+    }
+  });
+
   return teams;
 }
+
+// Team base configuration: which grid cell and geometry each team uses
+export const TEAM_BASES = {
+  team1: { startRow: 2, startCol: 2, geometryType: 'sphere' }, // Top-left: camel
+  team2: { startRow: 2, startCol: 13, geometryType: 'cube' }, // Top-right: cobra
+  team3: { startRow: 13, startCol: 2, geometryType: 'triangle' }, // Bottom-left: ant
+};

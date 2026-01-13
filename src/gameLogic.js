@@ -1,7 +1,7 @@
-import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
 import { computePath, stepAlongPath } from './pathfinding.js';
 import { runAI } from './ai.js';
 import { GridCollisionSystem } from './collision.js';
+import { spawnUnitAtBase, TEAM_BASES } from './units.js';
 
 export class GameLogic {
   constructor(scene, terrain) {
@@ -12,6 +12,19 @@ export class GameLogic {
     this.scores = { player: 0, ai1: 0, ai2: 0 };
     this.unitPaths = new Map();
     this.collisionSystem = new GridCollisionSystem(scene, terrain);
+
+    // Periodic spawning of new units from each team's base
+    this.baseSpawnInterval = 10; // seconds (default)
+    this.buffedSpawnInterval = 9; // seconds (when buff is active)
+    this.spawnInterval = this.baseSpawnInterval;
+    this.spawnTimer = 0;
+
+    // Buff grid tracking
+    this.buffGrids = terrain.buffGrids || [];
+    // Track how long each unit has been on a buff grid: Map<unitUuid, { cell, time }>
+    this.unitBuffTimers = new Map();
+    this.buffActivationTime = 10; // seconds to activate buff
+    this.spawnSpeedBuffActive = false; // Global buff state
   }
 
   setSceneEntities({ zones, teams }) {
@@ -63,8 +76,70 @@ export class GameLogic {
     // Run basic AI
     runAI(this);
 
+    // Update buff grid interactions
+    this.updateBuffGrids(dt);
+
+    // Periodically spawn new units at each team's base
+    // Use buffed spawn interval if buff is active
+    this.spawnInterval = this.spawnSpeedBuffActive ? this.buffedSpawnInterval : this.baseSpawnInterval;
+    this.spawnTimer += dt;
+    if (this.spawnTimer >= this.spawnInterval) {
+      this.spawnTimer = 0;
+
+      Object.keys(TEAM_BASES).forEach((teamId) => {
+        const unit = spawnUnitAtBase(this.scene, this.terrain, teamId);
+        if (unit) {
+          if (!this.teams[teamId]) this.teams[teamId] = [];
+          this.teams[teamId].push(unit);
+        }
+      });
+    }
+
     // Zone control + scoring
     this.updateZones(dt);
+  }
+
+  /**
+   * Track units standing on buff grids and activate spawn speed buff after 10 seconds
+   */
+  updateBuffGrids(dt) {
+    // Get all units from all teams
+    const allUnits = Object.values(this.teams).flat();
+    
+    // Track which units are currently on buff grids
+    const unitsOnBuffGrids = new Map();
+    
+    allUnits.forEach(unit => {
+      const cell = this.terrain.getCellFromWorldPos(unit.position.x, unit.position.z);
+      if (cell && cell.type === 'buff') {
+        unitsOnBuffGrids.set(unit.uuid, cell);
+      }
+    });
+    
+    // Update timers for units on buff grids
+    unitsOnBuffGrids.forEach((cell, unitUuid) => {
+      const existing = this.unitBuffTimers.get(unitUuid);
+      if (existing && existing.cell === cell) {
+        // Same cell, increment timer
+        existing.time += dt;
+        
+        // Activate buff if timer reaches threshold
+        if (existing.time >= this.buffActivationTime && !this.spawnSpeedBuffActive) {
+          this.spawnSpeedBuffActive = true;
+          console.log('Spawn speed buff activated! Spawn time reduced from 10s to 9s');
+        }
+      } else {
+        // New cell or different cell, start timer
+        this.unitBuffTimers.set(unitUuid, { cell, time: dt });
+      }
+    });
+    
+    // Remove timers for units that left buff grids
+    this.unitBuffTimers.forEach((data, unitUuid) => {
+      if (!unitsOnBuffGrids.has(unitUuid)) {
+        this.unitBuffTimers.delete(unitUuid);
+      }
+    });
   }
 
   updateZones(dt) {

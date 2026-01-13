@@ -36,6 +36,7 @@ let terrain, teams, game, input;
   const sceneContent = await buildSceneContent(scene);
   terrain = sceneContent.terrain;
   teams = sceneContent.teams;
+  terrain.buffGrids = sceneContent.buffGrids || []; // Store buff grids in terrain for access
 
   // Setup game logic
   game = new GameLogic(scene, terrain);

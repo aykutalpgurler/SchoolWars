@@ -19,7 +19,7 @@ export class GridCell {
     
     // Grid properties
     this.walkable = true;
-    this.type = 'ground'; // 'ground', 'obstacle', 'water', 'wall', etc.
+    this.type = 'normal'; // 'normal', 'spawn', 'buff', 'obstacle', 'water', 'wall', etc.
     this.color = 0xffffff; // Default white
     this.height = 0;
     this.size = 1.0; // Cell size
@@ -54,9 +54,21 @@ export class GridCell {
     
     // Set default properties based on type
     switch (type) {
+      case 'normal':
       case 'ground':
         this.walkable = true;
         this.color = 0xffffff;
+        this.height = 0;
+        break;
+      case 'spawn':
+        this.walkable = true;
+        // Color will be set by team color in spawnTeams
+        this.color = 0xffffff;
+        this.height = 0;
+        break;
+      case 'buff':
+        this.walkable = true;
+        this.color = 0x4a90e2; // Blue color for buff grids
         this.height = 0;
         break;
       case 'obstacle':
@@ -78,6 +90,14 @@ export class GridCell {
         this.walkable = true;
         this.color = 0xffffff;
         this.height = 0;
+    }
+    
+    // Update mesh color if mesh exists
+    if (this.mesh && this.mesh.material) {
+      if (this.mesh.material.color) {
+        this.mesh.material.color.setHex(this.color);
+        this.mesh.material.needsUpdate = true;
+      }
     }
   }
   

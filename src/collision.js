@@ -19,6 +19,9 @@ export class GridCollisionSystem {
     // Reusable vectors
     this.rayOrigin = new THREE.Vector3();
     this.rayDirection = new THREE.Vector3(0, -1, 0); // Cast downward
+
+    // Reusable vector for simple unit-unit separation when Box3 colliders intersect
+    this._tmpVec = new THREE.Vector3();
   }
 
   /**
@@ -102,9 +105,20 @@ export class GridCollisionSystem {
    * Update collision for all units in teams
    */
   updateAllUnits(teams) {
-    Object.values(teams).flat().forEach(unit => {
+    const allUnits = Object.values(teams).flat();
+
+    // First, keep units glued to the terrain surface using raycasting
+    allUnits.forEach(unit => {
       this.updateUnit(unit);
+
+      // Update Box3 collider if this unit has logical data attached
+      if (unit.userData && unit.userData.unit) {
+        unit.userData.unit.updateCollider();
+      }
     });
+
+    // Then, resolve simple box-vs-box collisions between units using their Box3
+    this._resolveUnitCollisions(allUnits);
   }
 
   /**
@@ -139,5 +153,41 @@ export class GridCollisionSystem {
     }
     
     return false; // Position was valid
+  }
+
+  /**
+   * Simple AABB (Box3) based collision resolution between units.
+   * Uses Unit.userData.unit.collider (a THREE.Box3) and intersectsBox,
+   * following the pattern from MDN:
+   * https://developer.mozilla.org/en-US/docs/Games/Techniques/3D_collision_detection/Bounding_volume_collision_detection_with_THREE.js
+   */
+  _resolveUnitCollisions(units) {
+    const n = units.length;
+    for (let i = 0; i < n; i++) {
+      const a = units[i];
+      const aData = a.userData && a.userData.unit;
+      if (!aData) continue;
+
+      for (let j = i + 1; j < n; j++) {
+        const b = units[j];
+        const bData = b.userData && b.userData.unit;
+        if (!bData) continue;
+
+        if (!aData.intersects(bData)) continue;
+
+        // Basic separation along XZ: push units slightly apart
+        this._tmpVec.subVectors(a.position, b.position);
+        // Avoid zero-length vector
+        if (this._tmpVec.lengthSq() === 0) {
+          this._tmpVec.set(Math.random() - 0.5, 0, Math.random() - 0.5);
+        }
+        this._tmpVec.y = 0;
+        this._tmpVec.normalize();
+
+        const pushDistance = 0.05; // tweak for how strong the separation feels
+        a.position.addScaledVector(this._tmpVec, pushDistance * 0.5);
+        b.position.addScaledVector(this._tmpVec, -pushDistance * 0.5);
+      }
+    }
   }
 }
