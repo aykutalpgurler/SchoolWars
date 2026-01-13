@@ -108,7 +108,15 @@ function animate() {
   // Make health bars face camera (billboard effect)
   scene.traverse((object) => {
     if (object.userData.isBillboard) {
-      object.quaternion.copy(camera.quaternion);
+      // Get camera direction in world space
+      const cameraWorldPos = new THREE.Vector3();
+      camera.getWorldPosition(cameraWorldPos);
+      
+      const healthBarWorldPos = new THREE.Vector3();
+      object.getWorldPosition(healthBarWorldPos);
+      
+      // Make health bar look at camera
+      object.lookAt(cameraWorldPos);
     }
   });
 

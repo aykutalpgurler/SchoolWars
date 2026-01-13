@@ -189,11 +189,31 @@ export function stepAlongPath(unit, dt, path, speed = 2.0) {
   const dirX = dx / dist;
   const dirZ = dz / dist;
   
+  // Rotate unit to face movement direction smoothly
+  const targetAngle = Math.atan2(dirX, dirZ);
+  const currentAngle = unit.rotation.y;
+  
+  // Calculate shortest rotation difference
+  let angleDiff = targetAngle - currentAngle;
+  while (angleDiff > Math.PI) angleDiff -= 2 * Math.PI;
+  while (angleDiff < -Math.PI) angleDiff += 2 * Math.PI;
+  
+  // Smoothly interpolate rotation (adjust 8.0 for faster/slower turning)
+  const rotationSpeed = 8.0;
+  unit.rotation.y += angleDiff * Math.min(1, rotationSpeed * dt);
+  
+  // Add subtle bob animation while moving
+  if (!unit.userData._bobTime) unit.userData._bobTime = 0;
+  unit.userData._bobTime += dt * 8; // Bob frequency
+  const bobAmount = 0.05; // How much to bob up/down
+  const baseBob = Math.sin(unit.userData._bobTime) * bobAmount;
+  unit.userData._bobOffset = baseBob;
+  
   // Move in X and Z only, let collision system handle Y
   const moveDistance = speed * dt;
   unit.position.x += dirX * moveDistance;
   unit.position.z += dirZ * moveDistance;
-  // Y will be set by collision system
+  // Y will be set by collision system (+ bob will be added there)
   return false;
 }
 

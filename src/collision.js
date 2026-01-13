@@ -82,8 +82,9 @@ export class GridCollisionSystem {
     // Get actual terrain height at this position using raycasting
     const terrainHeight = this.getTerrainHeightAt(unitX, unitZ);
     
-    // Position unit on terrain surface
-    unit.position.y = terrainHeight + this.unitBaseHeight;
+    // Position unit on terrain surface with bob animation
+    const bobOffset = unit.userData._bobOffset || 0;
+    unit.position.y = terrainHeight + this.unitBaseHeight + bobOffset;
     
     // Update cell tracking
     const previousCell = unit.userData.currentCell;
