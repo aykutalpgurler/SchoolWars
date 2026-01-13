@@ -5,6 +5,10 @@ export function setupInput({ renderer, camera, scene, terrain, cameraController,
   const pointer = new THREE.Vector2();
   const selected = new Set();
 
+  // Attack targeting state
+  let attackHoverTarget = null;
+  let attackArrow = null;
+
   const helpPanel = document.getElementById('helpPanel');
   const shaderStatus = document.getElementById('shaderStatus');
   const dragState = { active: false, start: new THREE.Vector2(), end: new THREE.Vector2() };
@@ -23,7 +27,7 @@ export function setupInput({ renderer, camera, scene, terrain, cameraController,
   function pickGround(event) {
     updatePointer(event);
     raycaster.setFromCamera(pointer, camera);
-    
+
     // Use terrain's raycastToGrid method to get both point and cell
     const hit = terrain.raycastToGrid(raycaster);
     if (hit) {
@@ -35,7 +39,7 @@ export function setupInput({ renderer, camera, scene, terrain, cameraController,
   function pickGridCell(event) {
     updatePointer(event);
     raycaster.setFromCamera(pointer, camera);
-    
+
     // Use terrain's raycastToGrid method to get the cell
     const hit = terrain.raycastToGrid(raycaster);
     if (hit) {
@@ -50,15 +54,15 @@ export function setupInput({ renderer, camera, scene, terrain, cameraController,
     // Only allow selecting cube units (team2)
     const cubeUnits = (game.teams.team2 || []).filter(unit => unit.userData.type === 'cube');
     console.log('[pickUnits] Total cube units:', cubeUnits.length);
-    console.log('[pickUnits] Cube units:', cubeUnits.map(u => ({ 
-      uuid: u.uuid, 
-      position: u.position, 
+    console.log('[pickUnits] Cube units:', cubeUnits.map(u => ({
+      uuid: u.uuid,
+      position: u.position,
       type: u.userData.type,
       team: u.userData.team,
       isGroup: u.isGroup,
       children: u.children?.length || 0
     })));
-    
+
     // Collect all meshes from Groups for raycasting
     const allMeshes = [];
     cubeUnits.forEach(unit => {
@@ -80,15 +84,15 @@ export function setupInput({ renderer, camera, scene, terrain, cameraController,
       });
     });
     console.log('[pickUnits] Total meshes collected:', allMeshes.length);
-    
+
     // Log raycast details
     console.log('[pickUnits] Raycast origin:', raycaster.ray.origin);
     console.log('[pickUnits] Raycast direction:', raycaster.ray.direction);
-    
+
     // Use recursive intersection to find hits
     const hits = raycaster.intersectObjects(cubeUnits, true);
     console.log('[pickUnits] Raycast hits (recursive):', hits.length);
-    
+
     // Also try with meshes directly
     if (hits.length === 0 && allMeshes.length > 0) {
       const meshHits = raycaster.intersectObjects(allMeshes, false);
@@ -96,7 +100,7 @@ export function setupInput({ renderer, camera, scene, terrain, cameraController,
       if (meshHits.length > 0) {
         hits.push(...meshHits);
       }
-      
+
       // Try with all objects in scene to see if anything is hit
       const allHits = raycaster.intersectObjects(scene.children, true);
       console.log('[pickUnits] Raycast hits (all scene objects):', allHits.length);
@@ -109,7 +113,7 @@ export function setupInput({ renderer, camera, scene, terrain, cameraController,
         });
       }
     }
-    
+
     if (hits.length > 0) {
       console.log('[pickUnits] Hit object:', {
         uuid: hits[0].object.uuid,
@@ -143,6 +147,39 @@ export function setupInput({ renderer, camera, scene, terrain, cameraController,
     return null;
   }
 
+  /**
+   * Pick any enemy unit under the cursor (non-team2).
+   */
+  function pickEnemyUnit(event) {
+    updatePointer(event);
+    raycaster.setFromCamera(pointer, camera);
+
+    const allUnits = Object.values(game.teams || {})
+      .flat()
+      .filter(u => u.userData.team && u.userData.team !== 'team2');
+
+    if (allUnits.length === 0) return null;
+
+    const hits = raycaster.intersectObjects(allUnits, true);
+    if (hits.length === 0) return null;
+
+    let enemy = hits[0].object;
+    while (enemy.parent) {
+      const parent = enemy.parent;
+      if (parent.userData && parent.userData.team && parent.userData.team !== 'team2') {
+        enemy = parent;
+        break;
+      }
+      enemy = parent;
+    }
+
+    if (enemy.userData && enemy.userData.team && enemy.userData.team !== 'team2') {
+      return enemy;
+    }
+
+    return null;
+  }
+
   // Track if we're in "move mode" (unit selected, waiting for terrain click)
   let moveMode = false;
 
@@ -155,12 +192,12 @@ export function setupInput({ renderer, camera, scene, terrain, cameraController,
       dragState.active = true;
       dragState.start.set(e.clientX, e.clientY);
       dragState.end.copy(dragState.start);
-      
+
       const unit = pickUnits(e);
       clickedOnUnit = !!unit;
       initialUnitClick = unit;
       console.log('[pointerdown] Unit picked:', unit ? unit.uuid : 'null');
-      
+
       if (unit) {
         console.log('[pointerdown] Clicked on unit:', {
           uuid: unit.uuid,
@@ -181,8 +218,25 @@ export function setupInput({ renderer, camera, scene, terrain, cameraController,
         updateDebugInfo(unit, terrain);
         console.log('[pointerdown] Selection size after click:', selected.size);
       } else {
-        console.log('[pointerdown] No unit clicked, checking terrain');
-        // Check if we clicked on terrain
+        console.log('[pointerdown] No unit clicked, checking enemy or terrain');
+
+        // First, see if we clicked an enemy unit to attack
+        if (selected.size > 0) {
+          const enemy = pickEnemyUnit(e);
+          if (enemy) {
+            console.log('[pointerdown] Issuing attack on enemy');
+            game.issueAttack([...selected], enemy);
+            // Clear the arrow when clicking enemy
+            attackHoverTarget = null;
+            if (attackArrow) attackArrow.visible = false;
+            moveMode = false;
+            // Keep selection so player still sees attackers selected
+            updateDebugInfo([...selected][0], terrain);
+            return;
+          }
+        }
+
+        // Otherwise, check if we clicked on terrain to move
         const groundHit = pickGround(e);
         if (groundHit && selected.size > 0) {
           console.log('[pointerdown] Moving selected units to terrain');
@@ -224,18 +278,18 @@ export function setupInput({ renderer, camera, scene, terrain, cameraController,
   renderer.domElement.addEventListener('pointermove', e => {
     if (dragState.active) {
       dragState.end.set(e.clientX, e.clientY);
-      
+
       const dx = Math.abs(dragState.end.x - dragState.start.x);
       const dy = Math.abs(dragState.end.y - dragState.start.y);
       const threshold = 6;
-      
+
       // Show selection box if dragging far enough
       if (dx > threshold || dy > threshold) {
         const minX = Math.min(dragState.start.x, dragState.end.x);
         const maxX = Math.max(dragState.start.x, dragState.end.x);
         const minY = Math.min(dragState.start.y, dragState.end.y);
         const maxY = Math.max(dragState.start.y, dragState.end.y);
-        
+
         selectionBox.style.display = 'block';
         selectionBox.style.left = `${minX}px`;
         selectionBox.style.top = `${minY}px`;
@@ -245,6 +299,12 @@ export function setupInput({ renderer, camera, scene, terrain, cameraController,
         selectionBox.style.display = 'none';
       }
     }
+
+    // Show arrow when hovering over enemy
+    if (!dragState.active && selected.size > 0) {
+      const enemy = pickEnemyUnit(e);
+      attackHoverTarget = enemy;
+    }
   });
 
   renderer.domElement.addEventListener('pointerup', e => {
@@ -252,7 +312,7 @@ export function setupInput({ renderer, camera, scene, terrain, cameraController,
       const dx = Math.abs(dragState.end.x - dragState.start.x);
       const dy = Math.abs(dragState.end.y - dragState.start.y);
       const threshold = 6;
-      
+
       if (dx > threshold || dy > threshold) {
         // Box selection - select all units in the box
         boxSelect();
@@ -270,7 +330,7 @@ export function setupInput({ renderer, camera, scene, terrain, cameraController,
         updateDebugInfo(null, terrain);
         moveMode = false;
       }
-      
+
       dragState.active = false;
       clickedOnUnit = false;
       initialUnitClick = null;
@@ -322,7 +382,7 @@ export function setupInput({ renderer, camera, scene, terrain, cameraController,
     });
     selected.clear();
   }
-  
+
   function addSelection(u) {
     console.log('[addSelection] Adding unit:', {
       uuid: u.uuid,
@@ -407,7 +467,7 @@ export function setupInput({ renderer, camera, scene, terrain, cameraController,
     if (unit && unit.userData.currentCell) {
       const cell = unit.userData.currentCell;
       debugPanel.style.display = 'block';
-      
+
       document.getElementById('debugUnit').textContent = `${unit.userData.team || 'Unknown'} (${unit.userData.type || 'unit'})`;
       document.getElementById('debugCell').textContent = `Row: ${cell.row}, Col: ${cell.col}`;
       document.getElementById('debugCoords').textContent = `(${cell.x.toFixed(2)}, ${cell.z.toFixed(2)})`;
@@ -443,6 +503,47 @@ export function setupInput({ renderer, camera, scene, terrain, cameraController,
   return {
     selected,
     updateDebugInfo: (unit) => updateDebugInfo(unit, terrain),
+    update: () => {
+      // Show arrow on hover target only
+      let target = attackHoverTarget;
+
+      // Validate target (must be alive and in scene)
+      if (target) {
+        const isRemoved = !target.parent;
+        const isDead = target.userData.unit?.isDead;
+        if (isRemoved || isDead) {
+          target = null;
+          attackHoverTarget = null;
+        }
+      }
+
+      if (target) {
+        // Ensure arrow exists with static large size
+        if (!attackArrow) {
+          const dir = new THREE.Vector3(0, -1, 0);
+          attackArrow = new THREE.ArrowHelper(
+            dir,
+            new THREE.Vector3(),
+            1.5,      // Shaft length
+            0xff0000,
+            0.5,      // Head length
+            0.4       // Head width
+          );
+          scene.add(attackArrow);
+        }
+
+        const origin = target.position.clone();
+        origin.y += 2.0; // Start above target
+
+        attackArrow.position.copy(origin);
+        attackArrow.setLength(1.5, 0.5, 0.4); // Ensure size stays consistent
+        attackArrow.visible = true;
+      } else {
+        if (attackArrow) {
+          attackArrow.visible = false;
+        }
+      }
+    },
   };
 
   function translateSelection(axis, dir) {

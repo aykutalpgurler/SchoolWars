@@ -38,10 +38,10 @@ async function loadCobraModel() {
       (materials) => {
         // Log loaded material names for debugging
         console.log('Cobra MTL loaded. Material names:', Object.keys(materials.materials));
-        
+
         // Preload materials (this loads textures)
         materials.preload();
-        
+
         // Verify texture loading and set color space
         Object.keys(materials.materials).forEach((materialName) => {
           const mtlMaterial = materials.materials[materialName];
@@ -54,7 +54,7 @@ async function loadCobraModel() {
             console.warn(`Cobra material ${materialName} has no texture map`);
           }
         });
-        
+
         // Set materials for OBJ loader
         objLoader.setMaterials(materials);
 
@@ -63,14 +63,14 @@ async function loadCobraModel() {
           'cobra.obj',
           (object) => {
             console.log('Cobra OBJ loaded. Meshes:', object.children.length);
-            
+
             // Override materials with stylized low-poly material
             object.traverse((child) => {
               if (child.isMesh && child.material) {
                 // Log per-mesh material assignment
                 const originalMaterial = Array.isArray(child.material) ? child.material[0] : child.material;
                 console.log(`Cobra mesh "${child.name || 'unnamed'}" material:`, originalMaterial?.name || 'default');
-                
+
                 // Ensure geometry has proper normals for flat shading
                 if (child.geometry) {
                   // Compute vertex normals if needed (flat shading will use face normals)
@@ -78,17 +78,17 @@ async function loadCobraModel() {
                     child.geometry.computeVertexNormals();
                   }
                 }
-                
+
                 // Handle both single material and material arrays
                 const materials = Array.isArray(child.material) ? child.material : [child.material];
                 const newMaterials = [];
-                
+
                 materials.forEach((material) => {
                   if (!material) return;
-                  
+
                   // Create a new stylized material for clean low-poly look
                   const newMaterial = new THREE.MeshStandardMaterial();
-                  
+
                   // Get texture from original material if it exists
                   if (material.map) {
                     newMaterial.map = material.map;
@@ -114,52 +114,52 @@ async function loadCobraModel() {
                       }
                     );
                   }
-                  
+
                   // Set color to white so texture shows at full brightness
                   // Some MTL materials have Kd 0,0,0 which means they rely entirely on texture
                   newMaterial.color.setHex(0xffffff);
-                  
+
                   // Stylized low-poly material properties
                   newMaterial.roughness = 0.8; // Medium-high roughness for stylized look (not plastic)
                   newMaterial.metalness = 0.0; // Non-metallic for organic look
                   newMaterial.flatShading = true; // Enable flat shading for low-poly facet readability
-                  
+
                   // Ensure proper side rendering
                   newMaterial.side = THREE.FrontSide;
-                  
+
                   newMaterials.push(newMaterial);
                 });
-                
+
                 // Update the mesh material
                 child.material = Array.isArray(child.material) ? newMaterials : newMaterials[0];
-                
+
                 child.castShadow = true;
                 child.receiveShadow = true;
               }
             });
-            
+
             // Calculate bounding box to determine scale
             const box = new THREE.Box3().setFromObject(object);
             const size = box.getSize(new THREE.Vector3());
             const maxDim = Math.max(size.x, size.y, size.z);
-            
+
             // Scale to larger size for better visibility
             const targetSize = 1.2;
             const scale = targetSize / maxDim;
             object.scale.set(scale, scale, scale);
-            
+
             // Recalculate box after scaling
             box.setFromObject(object);
-            
+
             // Position model so its bottom (min Y) is at y=0
             const min = box.min;
             object.position.y = -min.y;
-            
+
             // Center horizontally (x and z)
             const center = box.getCenter(new THREE.Vector3());
             object.position.x = -center.x;
             object.position.z = -center.z;
-            
+
             cobraModelCache = object;
             resolve(object);
           },
@@ -197,7 +197,7 @@ async function loadCobraModel() {
                     child.receiveShadow = true;
                   }
                 });
-                
+
                 const box = new THREE.Box3().setFromObject(object);
                 const size = box.getSize(new THREE.Vector3());
                 const maxDim = Math.max(size.x, size.y, size.z);
@@ -210,7 +210,7 @@ async function loadCobraModel() {
                 const center = box.getCenter(new THREE.Vector3());
                 object.position.x = -center.x;
                 object.position.z = -center.z;
-                
+
                 cobraModelCache = object;
                 resolve(object);
               },
@@ -243,18 +243,18 @@ function makeCubeUnit(color) {
 
   // Clone the cached model (deep clone to clone materials and textures)
   const cobra = cobraModelCache.clone(true);
-  
+
   // Calculate bounding box to determine size for collision helper
   const box = new THREE.Box3().setFromObject(cobra);
   const size = box.getSize(new THREE.Vector3());
   const maxDim = Math.max(size.x, size.y, size.z);
-  
+
   // Create an invisible collision helper (larger sphere for easier clicking)
   // Make it about 3x the size of the model for easier clicking (adjusted for larger models)
   const collisionRadius = maxDim * 3.0;
   const collisionHelper = new THREE.Mesh(
     new THREE.SphereGeometry(collisionRadius, 16, 16),
-    new THREE.MeshBasicMaterial({ 
+    new THREE.MeshBasicMaterial({
       visible: false, // Invisible but still raycastable
       transparent: true,
       opacity: 0
@@ -266,37 +266,37 @@ function makeCubeUnit(color) {
   const center = box.getCenter(new THREE.Vector3());
   collisionHelper.position.copy(center);
   cobra.add(collisionHelper);
-  
+
   // Apply team color as a very subtle tint while preserving material properties
   cobra.traverse((child) => {
     if (child.isMesh && child.material) {
       // Skip collision helper
       if (child.userData.isCollisionHelper) return;
-      
+
       // Handle both single material and material arrays
       const materials = Array.isArray(child.material) ? child.material : [child.material];
       const clonedMaterials = materials.map(material => {
         if (!material) return material;
         const cloned = material.clone();
-        
+
         // Preserve flat shading for low-poly look
         if (material.flatShading !== undefined) {
           cloned.flatShading = material.flatShading;
         }
-        
+
         // Clone texture if present and ensure sRGB color space
         if (material.map) {
           cloned.map = material.map.clone();
           cloned.map.colorSpace = THREE.SRGBColorSpace;
           cloned.map.flipY = false;
         }
-        
+
         return cloned;
       });
-      
+
       clonedMaterials.forEach((material) => {
         if (!material) return;
-        
+
         // If material has a texture, ensure it's visible with subtle team tint
         if (material.map) {
           // Set color to white so texture shows at full brightness
@@ -309,18 +309,18 @@ function makeCubeUnit(color) {
           // If no texture, set the color directly
           material.color = new THREE.Color(color);
         }
-        
+
         // Ensure material properties are preserved
         material.roughness = material.roughness ?? 0.8;
         material.metalness = material.metalness ?? 0.0;
         material.flatShading = material.flatShading ?? true;
       });
-      
+
       // Update the mesh material
       child.material = Array.isArray(child.material) ? clonedMaterials : clonedMaterials[0];
     }
   });
-  
+
   return cobra;
 }
 
@@ -341,37 +341,37 @@ async function loadAntModel() {
     mtlLoader.setPath('./assets/desert-creatures/Ant/');
     objLoader.setPath('./assets/desert-creatures/Ant/');
 
-        // Load MTL material file first
-        mtlLoader.load(
-          'ant.mtl',
-          (materials) => {
-            // Preload materials (this loads textures)
-            materials.preload();
-            
-            // Ensure dark colors from MTL are properly applied
-            // The MTL has very dark Kd values (0.03, 0.02, 0.03 and 0.01, 0.01, 0.01)
-            Object.keys(materials.materials).forEach((materialName) => {
-              const mtlMaterial = materials.materials[materialName];
-              if (mtlMaterial) {
-                // Ensure the color from MTL Kd values is preserved
-                // MTLLoader should set this, but we'll ensure it's correct
-                if (mtlMaterial.color) {
-                  // The MTL Kd values are already very dark, so keep them
-                  // Don't override to white
-                } else {
-                  // If color wasn't set, use the dark values from MTL
-                  // lambert7SG: Kd 0.03 0.02 0.03, lambert8SG: Kd 0.01 0.01 0.01
-                  if (materialName.includes('lambert8')) {
-                    mtlMaterial.color = new THREE.Color(0x010101); // Very dark, almost black
-                  } else {
-                    mtlMaterial.color = new THREE.Color(0x030203); // Dark gray
-                  }
-                }
+    // Load MTL material file first
+    mtlLoader.load(
+      'ant.mtl',
+      (materials) => {
+        // Preload materials (this loads textures)
+        materials.preload();
+
+        // Ensure dark colors from MTL are properly applied
+        // The MTL has very dark Kd values (0.03, 0.02, 0.03 and 0.01, 0.01, 0.01)
+        Object.keys(materials.materials).forEach((materialName) => {
+          const mtlMaterial = materials.materials[materialName];
+          if (mtlMaterial) {
+            // Ensure the color from MTL Kd values is preserved
+            // MTLLoader should set this, but we'll ensure it's correct
+            if (mtlMaterial.color) {
+              // The MTL Kd values are already very dark, so keep them
+              // Don't override to white
+            } else {
+              // If color wasn't set, use the dark values from MTL
+              // lambert7SG: Kd 0.03 0.02 0.03, lambert8SG: Kd 0.01 0.01 0.01
+              if (materialName.includes('lambert8')) {
+                mtlMaterial.color = new THREE.Color(0x010101); // Very dark, almost black
+              } else {
+                mtlMaterial.color = new THREE.Color(0x030203); // Dark gray
               }
-            });
-            
-            // Set materials for OBJ loader
-            objLoader.setMaterials(materials);
+            }
+          }
+        });
+
+        // Set materials for OBJ loader
+        objLoader.setMaterials(materials);
 
         // Load OBJ model
         objLoader.load(
@@ -382,13 +382,13 @@ async function loadAntModel() {
               if (child.isMesh && child.material) {
                 // Handle both single material and material arrays
                 const materials = Array.isArray(child.material) ? child.material : [child.material];
-                
+
                 materials.forEach((material, index) => {
                   if (!material) return;
-                  
+
                   // Preserve the dark color from MTL - DO NOT override to white
                   // The MTL has intentionally dark Kd values (0.01-0.03) for a dark/black look
-                  
+
                   // Ensure material properties for good shading and contrast
                   if (material.isMeshStandardMaterial || material.isMeshPhongMaterial || material.isMeshLambertMaterial) {
                     // Material is already a standard type, just enhance properties
@@ -404,7 +404,7 @@ async function loadAntModel() {
                   } else {
                     // Convert to MeshStandardMaterial if it's not already a standard type
                     const newMaterial = new THREE.MeshStandardMaterial();
-                    
+
                     // Preserve the dark color from MTL
                     if (material.color) {
                       newMaterial.color.copy(material.color);
@@ -412,59 +412,59 @@ async function loadAntModel() {
                       // Use dark color from MTL
                       newMaterial.color.setRGB(0.02, 0.02, 0.02);
                     }
-                    
+
                     newMaterial.roughness = 0.7;
                     newMaterial.metalness = 0.1;
-                    
+
                     if (material.map) {
                       newMaterial.map = material.map;
                       newMaterial.map.flipY = false;
                     }
-                    
+
                     materials[index] = newMaterial;
                     return;
                   }
-                  
+
                   // Ensure texture is configured correctly
                   if (material.map) {
                     material.map.flipY = false;
                     material.needsUpdate = true;
                   }
-                  
+
                   // CRITICAL: Do NOT override the color - keep the dark MTL colors
                   // The color should already be set correctly from the MTL Kd values
                 });
-                
+
                 // Update the mesh material
                 child.material = Array.isArray(child.material) ? materials : materials[0];
-                
+
                 child.castShadow = true;
                 child.receiveShadow = true;
               }
             });
-            
+
             // Calculate bounding box to determine scale
             const box = new THREE.Box3().setFromObject(object);
             const size = box.getSize(new THREE.Vector3());
             const maxDim = Math.max(size.x, size.y, size.z);
-            
+
             // Scale to larger size for better visibility
             const targetSize = 1.6;
             const scale = targetSize / maxDim;
             object.scale.set(scale, scale, scale);
-            
+
             // Recalculate box after scaling
             box.setFromObject(object);
-            
+
             // Position model so its bottom (min Y) is at y=0
             const min = box.min;
             object.position.y = -min.y;
-            
+
             // Center horizontally (x and z)
             const center = box.getCenter(new THREE.Vector3());
             object.position.x = -center.x;
             object.position.z = -center.z;
-            
+
             antModelCache = object;
             resolve(object);
           },
@@ -489,7 +489,7 @@ async function loadAntModel() {
                 child.receiveShadow = true;
               }
             });
-            
+
             const box = new THREE.Box3().setFromObject(object);
             const size = box.getSize(new THREE.Vector3());
             const maxDim = Math.max(size.x, size.y, size.z);
@@ -502,7 +502,7 @@ async function loadAntModel() {
             const center = box.getCenter(new THREE.Vector3());
             object.position.x = -center.x;
             object.position.z = -center.z;
-            
+
             antModelCache = object;
             resolve(object);
           },
@@ -521,17 +521,17 @@ function makeTriangleUnit(color) {
   if (!antModelCache) {
     console.error('Ant model not loaded yet. Call loadAntModel() first.');
     // Fallback to triangle if model not loaded
-  const geo = new THREE.TetrahedronGeometry(0.2, 0);
-  const mat = new THREE.MeshStandardMaterial({ color });
-  const mesh = new THREE.Mesh(geo, mat);
-  mesh.castShadow = true;
-  mesh.receiveShadow = true;
-  return mesh;
+    const geo = new THREE.TetrahedronGeometry(0.2, 0);
+    const mat = new THREE.MeshStandardMaterial({ color });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    return mesh;
   }
 
   // Clone the cached model (deep clone to clone materials and textures)
   const ant = antModelCache.clone(true);
-  
+
   // Apply team color as a very subtle tint while preserving dark appearance
   ant.traverse((child) => {
     if (child.isMesh && child.material) {
@@ -541,27 +541,27 @@ function makeTriangleUnit(color) {
         if (!material) return material;
         return material.clone();
       });
-      
+
       clonedMaterials.forEach((material) => {
         if (!material) return;
-        
+
         // Clone texture if present
         if (material.map) {
           material.map = material.map.clone();
           material.map.flipY = false;
         }
-        
+
         // Preserve the dark color from MTL, but apply a very subtle team color tint
         if (material.color) {
           // Get the current dark color
           const currentColor = material.color.clone();
-          
+
           // Apply a very subtle team color tint (95% original dark color, 5% team color)
           // This keeps it dark but adds a hint of team color
           const teamColor = new THREE.Color(color);
           // Make team color darker to match the ant's dark aesthetic
           teamColor.multiplyScalar(0.15); // Darken team color significantly
-          
+
           // Blend: mostly keep the dark color, add a tiny bit of darkened team color
           currentColor.lerp(teamColor, 0.05);
           material.color = currentColor;
@@ -573,17 +573,17 @@ function makeTriangleUnit(color) {
           darkBase.lerp(teamColor, 0.05);
           material.color = darkBase;
         }
-        
+
         // Ensure material properties for good shading
         material.roughness = 0.7;
         material.metalness = 0.1;
       });
-      
+
       // Update the mesh material
       child.material = Array.isArray(child.material) ? clonedMaterials : clonedMaterials[0];
     }
   });
-  
+
   return ant;
 }
 
@@ -610,10 +610,10 @@ async function loadCamelModel() {
       (materials) => {
         // Log loaded material names for debugging
         console.log('Camel MTL loaded. Material names:', Object.keys(materials.materials));
-        
+
         // Preload materials (this loads textures)
         materials.preload();
-        
+
         // Verify texture loading and set color space
         Object.keys(materials.materials).forEach((materialName) => {
           const mtlMaterial = materials.materials[materialName];
@@ -626,7 +626,7 @@ async function loadCamelModel() {
             console.warn(`Camel material ${materialName} has no texture map`);
           }
         });
-        
+
         // Set materials for OBJ loader
         objLoader.setMaterials(materials);
 
@@ -635,14 +635,14 @@ async function loadCamelModel() {
           'DromedaryCamels.obj',
           (object) => {
             console.log('Camel OBJ loaded. Meshes:', object.children.length);
-            
+
             // Override materials with stylized low-poly material
             object.traverse((child) => {
               if (child.isMesh && child.material) {
                 // Log per-mesh material assignment
                 const originalMaterial = Array.isArray(child.material) ? child.material[0] : child.material;
                 console.log(`Camel mesh "${child.name || 'unnamed'}" material:`, originalMaterial?.name || 'default');
-                
+
                 // Ensure geometry has proper normals for flat shading
                 if (child.geometry) {
                   // Compute vertex normals if needed (flat shading will use face normals)
@@ -650,17 +650,17 @@ async function loadCamelModel() {
                     child.geometry.computeVertexNormals();
                   }
                 }
-                
+
                 // Handle both single material and material arrays
                 const materials = Array.isArray(child.material) ? child.material : [child.material];
                 const newMaterials = [];
-                
+
                 materials.forEach((material) => {
                   if (!material) return;
-                  
+
                   // Create a new stylized material for clean low-poly look
                   const newMaterial = new THREE.MeshStandardMaterial();
-                  
+
                   // Get texture from original material if it exists
                   if (material.map) {
                     newMaterial.map = material.map;
@@ -686,52 +686,52 @@ async function loadCamelModel() {
                       }
                     );
                   }
-                  
+
                   // Set color to white so texture shows at full brightness
                   // (MTL has Kd 0,0,0 which means it relies entirely on texture)
                   newMaterial.color.setHex(0xffffff);
-                  
+
                   // Stylized low-poly material properties
                   newMaterial.roughness = 0.8; // Medium-high roughness for stylized look (not plastic)
                   newMaterial.metalness = 0.0; // Non-metallic for organic look
                   newMaterial.flatShading = true; // Enable flat shading for low-poly facet readability
-                  
+
                   // Ensure proper side rendering
                   newMaterial.side = THREE.FrontSide;
-                  
+
                   newMaterials.push(newMaterial);
                 });
-                
+
                 // Update the mesh material
                 child.material = Array.isArray(child.material) ? newMaterials : newMaterials[0];
-                
+
                 child.castShadow = true;
                 child.receiveShadow = true;
               }
             });
-            
+
             // Calculate bounding box to determine scale
             const box = new THREE.Box3().setFromObject(object);
             const size = box.getSize(new THREE.Vector3());
             const maxDim = Math.max(size.x, size.y, size.z);
-            
+
             // Scale to larger size for better visibility
             const targetSize = 1.6;
             const scale = targetSize / maxDim;
             object.scale.set(scale, scale, scale);
-            
+
             // Recalculate box after scaling
             box.setFromObject(object);
-            
+
             // Position model so its bottom (min Y) is at y=0
             const min = box.min;
             object.position.y = -min.y;
-            
+
             // Center horizontally (x and z)
             const center = box.getCenter(new THREE.Vector3());
             object.position.x = -center.x;
             object.position.z = -center.z;
-            
+
             camelModelCache = object;
             resolve(object);
           },
@@ -769,7 +769,7 @@ async function loadCamelModel() {
                     child.receiveShadow = true;
                   }
                 });
-                
+
                 const box = new THREE.Box3().setFromObject(object);
                 const size = box.getSize(new THREE.Vector3());
                 const maxDim = Math.max(size.x, size.y, size.z);
@@ -782,7 +782,7 @@ async function loadCamelModel() {
                 const center = box.getCenter(new THREE.Vector3());
                 object.position.x = -center.x;
                 object.position.z = -center.z;
-                
+
                 camelModelCache = object;
                 resolve(object);
               },
@@ -805,17 +805,17 @@ function makeSphereUnit(color) {
   if (!camelModelCache) {
     console.error('Camel model not loaded yet. Call loadCamelModel() first.');
     // Fallback to sphere if model not loaded
-  const geo = new THREE.SphereGeometry(0.2, 12, 12);
-  const mat = new THREE.MeshStandardMaterial({ color });
-  const mesh = new THREE.Mesh(geo, mat);
-  mesh.castShadow = true;
-  mesh.receiveShadow = true;
-  return mesh;
+    const geo = new THREE.SphereGeometry(0.2, 12, 12);
+    const mat = new THREE.MeshStandardMaterial({ color });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    return mesh;
   }
 
   // Clone the cached model (deep clone to clone materials and textures)
   const camel = camelModelCache.clone(true);
-  
+
   // Apply team color as a very subtle tint while preserving material properties
   camel.traverse((child) => {
     if (child.isMesh && child.material) {
@@ -824,25 +824,25 @@ function makeSphereUnit(color) {
       const clonedMaterials = materials.map(material => {
         if (!material) return material;
         const cloned = material.clone();
-        
+
         // Preserve flat shading for low-poly look
         if (material.flatShading !== undefined) {
           cloned.flatShading = material.flatShading;
         }
-        
+
         // Clone texture if present and ensure sRGB color space
         if (material.map) {
           cloned.map = material.map.clone();
           cloned.map.colorSpace = THREE.SRGBColorSpace;
           cloned.map.flipY = false;
         }
-        
+
         return cloned;
       });
-      
+
       clonedMaterials.forEach((material) => {
         if (!material) return;
-        
+
         // If material has a texture, ensure it's visible with subtle team tint
         if (material.map) {
           // Set color to white so texture shows at full brightness
@@ -856,18 +856,18 @@ function makeSphereUnit(color) {
           // If no texture, set the color directly
           material.color = new THREE.Color(color);
         }
-        
+
         // Ensure material properties are preserved
         material.roughness = material.roughness ?? 0.8;
         material.metalness = material.metalness ?? 0.0;
         material.flatShading = material.flatShading ?? true;
       });
-      
+
       // Update the mesh material
       child.material = Array.isArray(child.material) ? clonedMaterials : clonedMaterials[0];
     }
   });
-  
+
   return camel;
 }
 
@@ -890,9 +890,9 @@ function getTerrainHeightAt(scene, worldX, worldZ, cell) {
   const raycaster = new THREE.Raycaster();
   const rayOrigin = new THREE.Vector3(worldX, 100, worldZ); // Start high above
   const rayDirection = new THREE.Vector3(0, -1, 0); // Cast downward
-  
+
   raycaster.set(rayOrigin, rayDirection);
-  
+
   // Find all terrain meshes
   const terrainMeshes = [];
   scene.traverse((object) => {
@@ -900,14 +900,14 @@ function getTerrainHeightAt(scene, worldX, worldZ, cell) {
       terrainMeshes.push(object);
     }
   });
-  
+
   const intersects = raycaster.intersectObjects(terrainMeshes, false);
-  
+
   if (intersects.length > 0) {
     // Use the closest intersection (first one)
     return intersects[0].point.y;
   }
-  
+
   // Fallback: calculate from cell height (height scale is 0.2)
   const heightScale = 0.2;
   return cell ? cell.getY() * heightScale : 0;
@@ -919,6 +919,131 @@ const GEOMETRY_MAP = {
   cube: { create: makeCubeUnit, yOffset: 0.6, type: 'cube' }, // Cobra
   triangle: { create: makeTriangleUnit, yOffset: 0.2, type: 'triangle' }, // Ant
 };
+
+/**
+ * Attach a simple health bar above the unit.
+ * Green segment = remaining health, red segment = missing health.
+ */
+function attachHealthBar(visual, unitData) {
+  const barGroup = new THREE.Group();
+
+  let width = 1;  // Wider for all units
+  let height = 0.25; // Longer for all units
+
+ 
+
+  const bgGeom = new THREE.PlaneGeometry(width, height);
+  // Bright red background so missing health is clearly visible
+  const bgMat = new THREE.MeshBasicMaterial({ color: 0xff0000, depthTest: false });
+  const bg = new THREE.Mesh(bgGeom, bgMat);
+
+  const fgGeom = new THREE.PlaneGeometry(width, height);
+  const fgMat = new THREE.MeshBasicMaterial({ color: 0x00aa00, depthTest: false }); // Darker green
+  const fg = new THREE.Mesh(fgGeom, fgMat);
+  fg.position.z = 0.001;
+
+  barGroup.add(bg);
+  barGroup.add(fg);
+
+  // Add border lines (black outline around health bar)
+  const borderThickness = 0.04;
+  const borderColor = 0x000000; // Black
+  
+  // Top border
+  const topBorderGeom = new THREE.PlaneGeometry(width + borderThickness * 2, borderThickness);
+  const borderMat = new THREE.MeshBasicMaterial({ color: borderColor, depthTest: false });
+  const topBorder = new THREE.Mesh(topBorderGeom, borderMat);
+  topBorder.position.set(0, height / 2 + borderThickness / 2, 0.002);
+  barGroup.add(topBorder);
+
+  // Bottom border
+  const bottomBorder = new THREE.Mesh(topBorderGeom, borderMat.clone());
+  bottomBorder.position.set(0, -height / 2 - borderThickness / 2, 0.002);
+  barGroup.add(bottomBorder);
+
+  // Left border
+  const sideBorderGeom = new THREE.PlaneGeometry(borderThickness, height + borderThickness * 2);
+  const leftBorder = new THREE.Mesh(sideBorderGeom, borderMat.clone());
+  leftBorder.position.set(-width / 2 - borderThickness / 2, 0, 0.002);
+  barGroup.add(leftBorder);
+
+  // Right border
+  const rightBorder = new THREE.Mesh(sideBorderGeom, borderMat.clone());
+  rightBorder.position.set(width / 2 + borderThickness / 2, 0, 0.002);
+  barGroup.add(rightBorder);
+
+  // Add division lines (StarCraft 2 style)
+  const numDivisions = 6; // Number of segments
+  const lineThickness = 0.02;
+  const lineColor = 0x000000; // Black lines
+
+  for (let i = 1; i < numDivisions; i++) {
+    const lineGeom = new THREE.PlaneGeometry(lineThickness, height);
+    const lineMat = new THREE.MeshBasicMaterial({ color: lineColor, depthTest: false });
+    const line = new THREE.Mesh(lineGeom, lineMat);
+
+    // Position lines evenly across the bar width
+    const xPos = -(width / 2) + (width / numDivisions) * i;
+    line.position.set(xPos, 0, 0.003); // Slightly in front of the bars
+    barGroup.add(line);
+  }
+
+  // Use fixed dimensions for all units - same size regardless of model
+  let barHeight = 2.0; // Fixed vertical position
+
+
+
+  // Add additional height offset for specific unit types
+  if (unitData.type === 'sphere') { // Camel
+    barHeight = 9; // Move health bar higher for camel
+  }
+
+  if (unitData.type === 'cube') { // Cobra
+    barHeight = 7; // Move health bar higher for cobra
+  }
+
+
+
+
+  barGroup.position.set(0, barHeight, 0);
+
+  barGroup.renderOrder = 10;
+  barGroup.userData.isHealthBar = true;
+  barGroup.userData.isBillboard = true; // Mark as billboard for camera-facing
+
+  // Counterscale the health bar to cancel out the parent visual's scale
+  // This ensures all health bars are the same size regardless of unit scale
+  const scaleX = visual.scale.x || 1.0;
+  const scaleY = visual.scale.y || 1.0;
+  const scaleZ = visual.scale.z || 1.0;
+  barGroup.scale.set(1 / scaleX, 1 / scaleY, 1 / scaleZ);
+
+  visual.add(barGroup);
+
+  visual.userData.healthBar = {
+    group: barGroup,
+    fg,
+    width,
+  };
+
+  // Initialize bar scale
+  updateHealthBarVisual(visual);
+}
+
+/**
+ * Update a unit's health bar based on its current health.
+ */
+export function updateHealthBarVisual(visual) {
+  if (!visual || !visual.userData) return;
+  const unitData = visual.userData.unit;
+  const hb = visual.userData.healthBar;
+  if (!unitData || !hb) return;
+
+  const frac = Math.max(0, Math.min(1, unitData.health / unitData.maxHealth));
+  hb.fg.scale.x = frac;
+  hb.fg.position.x = -(1 - frac) * (hb.width / 2);
+  hb.group.visible = !unitData.isDead;
+}
 
 /**
  * Create units for a team and place them on terrain vertex grids
@@ -963,6 +1088,10 @@ function createTeamUnits(scene, terrain, teamId, startRow, startCol, geometryTyp
       // Place unit on the terrain surface
       visual.position.set(cell.x, terrainHeight + geometry.yOffset, cell.z);
 
+      // Now that the unit is placed, update collider and attach health bar above the model
+      unitData.updateCollider();
+      attachHealthBar(visual, unitData);
+
       visual.userData = {
         ...(visual.userData || {}),
         team: teamId,
@@ -983,7 +1112,45 @@ function createTeamUnits(scene, terrain, teamId, startRow, startCol, geometryTyp
 }
 
 /**
+ * Find a valid spawn cell free of collisions.
+ * Tries the base cell first, then adjacent cells in a spiral pattern.
+ */
+function findValidSpawnCell(scene, terrain, baseRow, baseCol, geometry) {
+  // Search pattern: base cell + adjacent cells in spiral order
+  const searchOrder = [
+    { row: 0, col: 0 },     // Base cell
+    { row: 0, col: 1 },     // Right
+    { row: 1, col: 0 },     // Down
+    { row: 0, col: -1 },    // Left
+    { row: -1, col: 0 },    // Up
+    { row: 1, col: 1 },     // Down-right
+    { row: 1, col: -1 },    // Down-left
+    { row: -1, col: 1 },    // Up-right
+    { row: -1, col: -1 },   // Up-left
+    { row: 0, col: 2 },     // Further right
+    { row: 2, col: 0 },     // Further down
+  ];
+
+  for (const offset of searchOrder) {
+    const cellRow = baseRow + offset.row;
+    const cellCol = baseCol + offset.col;
+    const cell = terrain.getCell(cellRow, cellCol);
+
+    if (!cell || !cell.walkable) continue;
+
+    // Check if this cell has any units already
+    if (cell.units && cell.units.length > 0) continue;
+
+    return cell;
+  }
+
+  // Fallback: return base cell (will overlap if necessary)
+  return terrain.getCell(baseRow, baseCol);
+}
+
+/**
  * Spawn a single unit at a team's base cell (no offsets), used for periodic spawning.
+ * Checks for collisions and tries to spawn in an adjacent cell if occupied.
  */
 export function spawnUnitAtBase(scene, terrain, teamId) {
   const base = TEAM_BASES[teamId];
@@ -993,7 +1160,8 @@ export function spawnUnitAtBase(scene, terrain, teamId) {
   const geometry = GEOMETRY_MAP[base.geometryType];
   if (!geometry) return null;
 
-  const cell = terrain.getCell(base.startRow, base.startCol);
+  // Find a valid spawn cell without collisions
+  const cell = findValidSpawnCell(scene, terrain, base.startRow, base.startCol, geometry);
   if (!cell) return null;
 
   const visual = geometry.create(color);
@@ -1010,8 +1178,13 @@ export function spawnUnitAtBase(scene, terrain, teamId) {
   const terrainHeight = getTerrainHeightAt(scene, cell.x, cell.z, cell);
   visual.position.set(cell.x, terrainHeight + geometry.yOffset, cell.z);
 
+  // Update collider after placing, then attach health bar above model
+  unitData.updateCollider();
+  attachHealthBar(visual, unitData);
+
   visual.userData = {
     ...(visual.userData || {}),
+    unit: unitData,
     team: teamId,
     cell,
     currentCell: cell,

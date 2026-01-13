@@ -1,7 +1,7 @@
 import { computePath, stepAlongPath } from './pathfinding.js';
 import { runAI } from './ai.js';
 import { GridCollisionSystem } from './collision.js';
-import { spawnUnitAtBase, TEAM_BASES } from './units.js';
+import { spawnUnitAtBase, TEAM_BASES, updateHealthBarVisual } from './units.js';
 
 export class GameLogic {
   constructor(scene, terrain) {
@@ -49,6 +49,37 @@ export class GameLogic {
     });
   }
 
+  /**
+   * Issue an attack order: selected player units (team2 cubes) move toward an enemy
+   * and will attack when in range.
+   */
+  issueAttack(units, target) {
+    if (!target) return;
+
+    // Only allow issuing orders for player-controlled cube units (team2)
+    const cubeUnits = units.filter(unit => unit.userData.type === 'cube' && unit.userData.team === 'team2');
+    cubeUnits.forEach(unit => {
+      const path = computePath({
+        start: unit.position.clone(),
+        target: target.position.clone(),
+        terrain: this.terrain,
+      });
+      this.unitPaths.set(unit.uuid, path);
+      unit.userData.target = target.position.clone();
+
+      // Set up attack targeting
+      unit.userData._attackTarget = target;
+      unit.userData._attackCooldown = 0;
+    });
+
+    // Ensure the enemy will fight back the closest attacker
+    if (cubeUnits.length > 0) {
+      const attacker = cubeUnits[0];
+      target.userData._attackTarget = attacker;
+      target.userData._attackCooldown = 0;
+    }
+  }
+
   update(dt) {
     // Move units along paths FIRST
     // Only move cube units (team2) - other units are controlled by AI
@@ -75,6 +106,9 @@ export class GameLogic {
 
     // Run basic AI
     runAI(this);
+
+    // Handle combat between units (attacks every few seconds)
+    this.updateCombat(dt);
 
     // Update buff grid interactions
     this.updateBuffGrids(dt);
@@ -140,6 +174,93 @@ export class GameLogic {
         this.unitBuffTimers.delete(unitUuid);
       }
     });
+  }
+
+  /**
+   * Resolve combat: units with _attackTarget will deal damage every 3 seconds
+   * when they are within a small range of their target.
+   */
+  updateCombat(dt) {
+    const allUnits = Object.entries(this.teams).flatMap(([teamId, units]) =>
+      units.map(u => ({ teamId, unit: u }))
+    );
+
+    const attackRange = 1.6;
+    const attackPeriod = 3.0;
+    const damage = 10;
+
+    allUnits.forEach(({ teamId, unit }) => {
+      const target = unit.userData._attackTarget;
+      if (!target) return;
+
+      // Ensure both units are still alive
+      const selfData = unit.userData.unit;
+      const targetData = target.userData?.unit;
+      if (!selfData || !targetData || selfData.isDead || targetData.isDead) {
+        unit.userData._attackTarget = null;
+        return;
+      }
+
+      const dist = unit.position.distanceTo(target.position);
+      if (dist > attackRange) return;
+
+      // In range: tick cooldown
+      const prev = unit.userData._attackCooldown ?? 0;
+      const next = prev - dt;
+      if (next > 0) {
+        unit.userData._attackCooldown = next;
+        return;
+      }
+
+      // Perform mutual damage
+      targetData.takeDamage(damage);
+      selfData.takeDamage(damage);
+
+      // Update health bars
+      updateHealthBarVisual(target);
+      updateHealthBarVisual(unit);
+
+      unit.userData._attackCooldown = attackPeriod;
+
+      // Handle deaths
+      if (targetData.isDead) {
+        this._handleUnitDeath(target);
+      }
+      if (selfData.isDead) {
+        this._handleUnitDeath(unit);
+      }
+    });
+  }
+
+  /**
+   * Remove a unit from the scene, its team list, and its current cell.
+   */
+  _handleUnitDeath(unit) {
+    // Remove from team arrays
+    Object.entries(this.teams).forEach(([teamId, units]) => {
+      const idx = units.indexOf(unit);
+      if (idx !== -1) {
+        units.splice(idx, 1);
+      }
+    });
+
+    // Remove from its grid cell
+    const cell = unit.userData.currentCell;
+    if (cell) {
+      cell.removeUnit(unit);
+    }
+
+    // Hide health bar (if any)
+    if (unit.userData.healthBar) {
+      unit.userData.healthBar.group.visible = false;
+    }
+
+    // Remove from scene
+    if (this.scene && unit.parent) {
+      this.scene.remove(unit);
+    }
+
+    unit.userData._attackTarget = null;
   }
 
   updateZones(dt) {

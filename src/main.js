@@ -95,6 +95,7 @@ function animate() {
 
   // Update debug info if unit is selected
   if (input) {
+    input.update();
     const selected = input.selected;
     if (selected.size > 0) {
       const unit = Array.from(selected)[0];
@@ -103,6 +104,13 @@ function animate() {
       input.updateDebugInfo(null);
     }
   }
+
+  // Make health bars face camera (billboard effect)
+  scene.traverse((object) => {
+    if (object.userData.isBillboard) {
+      object.quaternion.copy(camera.quaternion);
+    }
+  });
 
   renderer.render(scene, camera);
 }
