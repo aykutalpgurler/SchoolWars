@@ -401,13 +401,26 @@ export class GameLogic {
     overlay.style.zIndex = '20000';
     overlay.style.animation = 'fadeIn 0.5s ease-in';
 
+    // Create parchment card container
+    const cardContainer = document.createElement('div');
+    cardContainer.style.background = '#e8c170 url(./assets/textures/parchment.png)';
+    cardContainer.style.backgroundSize = 'cover';
+    cardContainer.style.padding = '40px 60px';
+    cardContainer.style.borderRadius = '12px';
+    cardContainer.style.border = '3px solid rgba(101, 67, 33, 0.8)';
+    cardContainer.style.boxShadow = '0 8px 24px rgba(0, 0, 0, 0.7)';
+    cardContainer.style.display = 'flex';
+    cardContainer.style.flexDirection = 'column';
+    cardContainer.style.alignItems = 'center';
+    cardContainer.style.maxWidth = '600px';
+
     // Title
     const titleEl = document.createElement('div');
     titleEl.textContent = title;
     titleEl.style.fontSize = '64px';
     titleEl.style.fontWeight = 'bold';
-    titleEl.style.color = color;
-    titleEl.style.textShadow = '2px 2px 4px rgba(0,0,0,0.9)';
+    titleEl.style.color = color === '#ff0000' ? '#654321' : '#2d5016';
+    titleEl.style.textShadow = '0 2px 4px rgba(255, 255, 255, 0.3)';
     titleEl.style.marginBottom = '20px';
     titleEl.style.animation = 'scaleIn 0.5s ease-out';
 
@@ -415,32 +428,35 @@ export class GameLogic {
     const messageEl = document.createElement('div');
     messageEl.textContent = message;
     messageEl.style.fontSize = '24px';
-    messageEl.style.color = '#ffffff';
-    messageEl.style.textShadow = '1px 1px 2px rgba(0,0,0,0.8)';
+    messageEl.style.color = '#3d2817';
+    messageEl.style.textShadow = '0 1px 2px rgba(255, 255, 255, 0.3)';
     messageEl.style.marginBottom = '40px';
-    messageEl.style.whiteSpace = 'pre-line'; // Allow newlines in message
+    messageEl.style.whiteSpace = 'pre-line';
     messageEl.style.textAlign = 'center';
+    messageEl.style.fontWeight = '600';
 
     // Restart button
     const restartBtn = document.createElement('button');
     restartBtn.textContent = 'Restart Game';
     restartBtn.style.fontSize = '20px';
     restartBtn.style.padding = '15px 40px';
-    restartBtn.style.backgroundColor = color;
-    restartBtn.style.color = '#ffffff';
-    restartBtn.style.border = 'none';
+    restartBtn.style.background = '#e8c170 url(./assets/textures/parchment.png)';
+    restartBtn.style.backgroundSize = 'cover';
+    restartBtn.style.color = '#3d2817';
+    restartBtn.style.border = '2px solid rgba(101, 67, 33, 0.8)';
     restartBtn.style.borderRadius = '8px';
     restartBtn.style.cursor = 'pointer';
     restartBtn.style.fontWeight = 'bold';
-    restartBtn.style.boxShadow = '0 4px 6px rgba(0,0,0,0.3)';
+    restartBtn.style.boxShadow = '0 4px 8px rgba(0, 0, 0, 0.4)';
     restartBtn.style.transition = 'transform 0.2s';
     restartBtn.onmouseover = () => { restartBtn.style.transform = 'scale(1.05)'; };
     restartBtn.onmouseout = () => { restartBtn.style.transform = 'scale(1)'; };
     restartBtn.onclick = () => { window.location.reload(); };
 
-    overlay.appendChild(titleEl);
-    overlay.appendChild(messageEl);
-    overlay.appendChild(restartBtn);
+    cardContainer.appendChild(titleEl);
+    cardContainer.appendChild(messageEl);
+    cardContainer.appendChild(restartBtn);
+    overlay.appendChild(cardContainer);
 
     // Add animations if not present
     if (!document.getElementById('gameEndAnimations')) {

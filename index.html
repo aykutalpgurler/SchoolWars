@@ -35,59 +35,79 @@
       position: absolute;
       top: 12px;
       left: 12px;
-      background: rgba(0, 0, 0, 0.55);
+      background: #e8c170 url('./assets/textures/parchment.png');
+      background-size: cover;
       padding: 10px 12px;
       border-radius: 8px;
       font-size: 14px;
       line-height: 1.4;
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      backdrop-filter: blur(4px);
+      border: 2px solid rgba(101, 67, 33, 0.8);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
       pointer-events: none;
+    }
+    .hud::before {
+      display: none;
     }
     .hud .title {
       font-weight: 700;
       margin-bottom: 4px;
-      color: #8fd3ff;
+      color: #654321;
+      text-shadow: 0 1px 2px rgba(255, 255, 255, 0.3);
+      position: relative;
+      z-index: 1;
     }
     .help-panel {
       position: absolute;
       right: 12px;
       top: 12px;
       max-width: 360px;
-      background: rgba(0, 0, 0, 0.7);
-      border: 1px solid rgba(255, 255, 255, 0.1);
+      background: #e8c170 url('./assets/textures/parchment.png');
+      background-size: cover;
+      border: 2px solid rgba(101, 67, 33, 0.8);
       border-radius: 10px;
       padding: 12px 14px;
       font-size: 13px;
       line-height: 1.5;
       display: none;
-      backdrop-filter: blur(6px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+    }
+    .help-panel::before {
+      display: none;
+    }
+    .help-panel > * {
+      position: relative;
+      z-index: 1;
     }
     .help-panel.visible {
       display: block;
     }
-    .help-panel h3 {
-      margin: 0 0 6px 0;
-      font-size: 15px;
-      color: #ffd166;
-    }
-    .help-panel ul {
-      margin: 0;
-      padding-left: 16px;
+    .help-panel h3 b89968 url('./assets/textures/sand.png');
+      background-size: cover;
+      border: 3px solid rgba(101, 67, 33, 0.8);
+      border-radius: 12px;
+      padding: 8px;
+      font-size: 12px;
+      line-height: 1.4;
+      display: none;
+      box-shadow: 0 6px 16px rgba(0, 0, 0, 0.6), inset 0 2px 4px rgba(0, 0, 0, 0.3);
+      pointer-events: auto;
+      max-height: 80vh;
+      overflow-y: auto;
     }
     .shader-panel {
       position: absolute;
       right: 12px;
       bottom: 12px;
       width: 300px;
-      background: rgba(0, 0, 0, 0.75);
-      border: 1px solid rgba(255, 255, 255, 0.12);
+      background: #e8c170 url('./assets/textures/parchment.png');
+      background-size: cover;
+      border: 2px solid rgba(101, 67, 33, 0.8);
       border-radius: 10px;
       padding: 12px 14px;
       font-size: 12px;
       line-height: 1.4;
       display: none;
-      backdrop-filter: blur(6px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
       pointer-events: auto;
       max-height: 80vh;
       overflow-y: auto;
@@ -98,7 +118,8 @@
     .shader-panel .title {
       font-weight: 700;
       margin-bottom: 8px;
-      color: #a78bfa;
+      color: #654321;
+      text-shadow: 0 1px 2px rgba(255, 255, 255, 0.3);
       font-size: 13px;
     }
     .shader-panel .section {
@@ -109,7 +130,7 @@
     .shader-panel .section-title {
       font-weight: 600;
       margin-bottom: 6px;
-      color: #c4b5fd;
+      color: #654321;
       font-size: 12px;
     }
     .shader-row {
@@ -120,32 +141,50 @@
       margin: 6px 0;
     }
     .shader-row label {
-      color: #e5e7eb;
+      color: #3d2817;
       font-size: 11px;
     }
     .shader-row input[type="range"] {
       flex: 1;
+    }3px solid rgba(101, 67, 33, 0.8);
+      border-radius: 12px;
+      padding: 8px;
+      font-size: 12px;
+      line-height: 1.4;
+      display: none;
+      box-shadow: 0 6px 16px rgba(0, 0, 0, 0.6), inset 0 2px 4px rgba(0, 0, 0, 0.3);
+      pointer-events: auto;
+      max-height: 80vh;
+      overflow-y: auto;
     }
-    .shader-value {
-      width: 48px;
-      text-align: right;
-      color: #9ca3af;
-      font-variant-numeric: tabular-nums;
-      font-size: 11px;
+    .spotlight-panel::before {
+      content: '';
+      position: absolute;
+      top: 6px;
+      left: 6px;
+      right: 6px;
+      bottom: 6px;
+      background: #e8c170 url('./assets/textures/parchment.png');
+      background-size: cover;
+      border-radius: 6px;
+      z-index: 0;
     }
-    .spotlight-panel {
+    .spotlight-panel > * {
+      position: relative;
+      z-index: 1
       position: absolute;
       left: 12px;
       bottom: 12px;
       width: 300px;
-      background: rgba(0, 0, 0, 0.75);
-      border: 1px solid rgba(255, 255, 255, 0.12);
+      background: #b89968 url('./assets/textures/sand.png');
+      background-size: cover;
+      border: 2px solid rgba(101, 67, 33, 0.8);
       border-radius: 10px;
       padding: 12px 14px;
       font-size: 12px;
       line-height: 1.4;
       display: none;
-      backdrop-filter: blur(6px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
       pointer-events: auto;
       max-height: 80vh;
       overflow-y: auto;
@@ -156,7 +195,8 @@
     .spotlight-panel .title {
       font-weight: 700;
       margin-bottom: 8px;
-      color: #fbbf24;
+      color: #3d2817;
+      text-shadow: 0 1px 2px rgba(255, 255, 255, 0.3);
       font-size: 13px;
     }
     .spotlight-panel .section {
@@ -167,7 +207,7 @@
     .spotlight-panel .section-title {
       font-weight: 600;
       margin-bottom: 6px;
-      color: #fcd34d;
+      color: #3d2817;
       font-size: 12px;
     }
     .spotlight-panel .shader-row {
@@ -178,7 +218,7 @@
       margin: 6px 0;
     }
     .spotlight-panel .shader-row label {
-      color: #e5e7eb;
+      color: #3d2817;
       font-size: 11px;
       min-width: 60px;
     }
@@ -191,32 +231,54 @@
     .spotlight-panel .shader-value {
       width: 48px;
       text-align: right;
-      color: #9ca3af;
+      color: #654321;
       font-variant-numeric: tabular-nums;
       font-size: 11px;
+      font-weight: 600;
     }
-    .spotlight-panel .info-line {
-      margin: 4px 0;
-      color: #e5e7eb;
-      font-size: 11px;
+    .spotlight-paneb89968 url('./assets/textures/sand.png');
+      background-size: cover;
+      padding: 8px;
+      border-radius: 12px;
+      font-size: 12px;
+      line-height: 1.6;
+      border: 3px solid rgba(101, 67, 33, 0.8);
+      box-shadow: 0 6px 16px rgba(0, 0, 0, 0.6), inset 0 2px 4px rgba(0, 0, 0, 0.3);
+      pointer-events: none;
+      min-width: 200px;
+      font-family: 'Courier New', monospace;
     }
-    .spotlight-panel .label {
-      color: #9ca3af;
+    .debug-panel::before {
+      content: '';
+      position: absolute;
+      top: 6px;
+      left: 6px;
+      right: 6px;
+      bottom: 6px;
+      background: #e8c170 url('./assets/textures/parchment.png');
+      background-size: cover;
+      border-radius: 6px;
+      z-index: 0;
     }
-    .spotlight-panel .value {
-      color: #fbbf24;
+    .debug-panel > * {
+      position: relative;
+      z-index: 1
     }
     .debug-panel {
       position: absolute;
       top: 12px;
       right: 12px;
-      background: rgba(0, 0, 0, 0.75);
+      background: #e8c170 url('./assets/textures/parchment.png');
+      background-size: cover;
       padding: 12px 14px;
       border-radius: 8px;
       font-size: 12px;
       line-height: 1.6;
-      border: 1px solid rgba(255, 255, 255, 0.15);
-      backdrop-filter: blur(4px);
+      position: relative;
+      z-index: 1;
+      padding: 6px 8px;
+      border: 2px solid rgba(139, 92, 46, 0.6);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
       pointer-events: none;
       min-width: 200px;
       font-family: 'Courier New', monospace;
@@ -224,18 +286,37 @@
     .debug-panel .title {
       font-weight: 700;
       margin-bottom: 6px;
-      color: #4ade80;
+      color: #654321;
+      text-shadow: 0 1px 2px rgba(255, 255, 255, 0.3);
       font-size: 13px;
     }
     .debug-panel .info-line {
       margin: 2px 0;
-      color: #e5e7eb;
+      color: #3d2817;
     }
     .debug-panel .label {
-      color: #9ca3af;
+      color: #654321;
     }
     .debug-panel .value {
-      color: #fbbf24;
+      color: #3d2817;
+      font-weight: 600;
+    }
+    
+    /* Add text color for hud content */
+    .hud {
+      color: #3d2817;
+    }
+    .hud #buffScoreText {
+      color: #3d2817;
+      font-weight: 500;
+    }
+    
+    /* Help panel text color */
+    .help-panel {
+      color: #3d2817;
+    }
+    .help-panel ul {
+      color: #3d2817;
     }
   </style>
 </head>
