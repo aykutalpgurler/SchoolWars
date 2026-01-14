@@ -1243,7 +1243,7 @@ export async function spawnTeams(scene, terrain) {
 
 // Team base configuration: which grid cell and geometry each team uses
 export const TEAM_BASES = {
-  team1: { startRow: 2, startCol: 2, geometryType: 'sphere' }, // Top-left: camel
-  team2: { startRow: 2, startCol: 13, geometryType: 'cube' }, // Top-right: cobra
-  team3: { startRow: 13, startCol: 2, geometryType: 'triangle' }, // Bottom-left: ant
+  team1: { startRow: 2, startCol: 2, geometryType: 'sphere' }, // Top-left edge: camel
+  team2: { startRow: 2, startCol: 20, geometryType: 'cube' }, // Top-right edge: cobra (player)
+  team3: { startRow: 20, startCol: 2, geometryType: 'triangle' }, // Bottom-left edge: ant
 };

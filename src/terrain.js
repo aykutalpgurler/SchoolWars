@@ -3,8 +3,8 @@ import { GridCell } from './gridCell.js';
 import { TerrainGenerator } from './terrainGenerator.js';
 
 export function buildTerrain(scene) {
-  const GRID_SIZE = 17;
-  const CELL_SIZE = 2; // Each grid cell is 1 unit square
+  const GRID_SIZE = 23;
+  const CELL_SIZE = 2.2; // Each grid cell is 1 unit square
   
   // Generate terrain using Diamond-Square and Perlin Noise
   const generator = new TerrainGenerator(GRID_SIZE, GRID_SIZE, CELL_SIZE, Date.now());

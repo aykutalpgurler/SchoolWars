@@ -8,7 +8,7 @@ import { spawnTeams, TEAM_BASES } from './units.js';
  */
 function createBuffGrids(terrain) {
   const buffGrids = [];
-  const numBuffGrids = 15; // 15 buff grids
+  const numBuffGrids = 20; // Increased from 15 to 20 buff grids
   const spawnCells = new Set();
   
   // Mark spawn cells as off-limits

@@ -220,7 +220,7 @@ export class TerrainGenerator {
    * Random offset for height variation
    */
   randomOffset() {
-    return Math.floor(this.Rng() * 20) - 5; // Random between -2 and 2
+    return Math.floor(this.Rng() * 35) - 12; // Moderate slope variation
   }
   
   /**
