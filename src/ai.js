@@ -146,8 +146,8 @@ function isBuffContested(cell, teamId) {
 function checkSpawnDefense(game, teamId, units) {
   const TEAM_BASES = {
     team1: { startRow: 2, startCol: 2 },
-    team2: { startRow: 2, startCol: 13 },
-    team3: { startRow: 13, startCol: 2 },
+    team2: { startRow: 2, startCol: 20 },
+    team3: { startRow: 20, startCol: 2 },
   };
   
   const base = TEAM_BASES[teamId];
@@ -190,8 +190,8 @@ function checkSpawnDefense(game, teamId, units) {
 function checkSpawnRush(game, teamId, units) {
   const TEAM_BASES = {
     team1: { startRow: 2, startCol: 2 },
-    team2: { startRow: 2, startCol: 13 },
-    team3: { startRow: 13, startCol: 2 },
+    team2: { startRow: 2, startCol: 20 },
+    team3: { startRow: 20, startCol: 2 },
   };
   
   // Check all enemy teams
@@ -382,8 +382,8 @@ function executeSplitStrategy(game, teamId, units) {
 function executeSpawnRushStrategy(game, teamId, units) {
   const TEAM_BASES = {
     team1: { startRow: 2, startCol: 2 },
-    team2: { startRow: 2, startCol: 13 },
-    team3: { startRow: 13, startCol: 2 },
+    team2: { startRow: 2, startCol: 20 },
+    team3: { startRow: 20, startCol: 2 },
   };
   
   // Find all enemy teams
