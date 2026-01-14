@@ -1,6 +1,6 @@
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
 
-export function setupInput({ renderer, camera, scene, terrain, cameraController, game, ui, spotlight, spotlightTarget }) {
+export function setupInput({ renderer, camera, scene, terrain, game }) {
   const raycaster = new THREE.Raycaster();
   const pointer = new THREE.Vector2();
   const selected = new Set();
@@ -10,13 +10,13 @@ export function setupInput({ renderer, camera, scene, terrain, cameraController,
   let attackArrow = null;
 
   const helpPanel = document.getElementById('helpPanel');
-  const shaderStatus = document.getElementById('shaderStatus');
   const dragState = { active: false, start: new THREE.Vector2(), end: new THREE.Vector2() };
 
   const axisState = {
     mode: 'translate', // or 'rotate'
     axis: 'y',
   };
+
 
   function updatePointer(event) {
     const rect = renderer.domElement.getBoundingClientRect();
@@ -419,20 +419,6 @@ export function setupInput({ renderer, camera, scene, terrain, cameraController,
     if (e.code === 'KeyH') {
       helpPanel.classList.toggle('visible');
     }
-    if (e.code === 'KeyL') {
-      spotlight.visible = !spotlight.visible;
-    }
-    if (e.code === 'BracketRight') {
-      spotlight.intensity = Math.min(spotlight.intensity + 0.1, 5);
-    }
-    if (e.code === 'BracketLeft') {
-      spotlight.intensity = Math.max(spotlight.intensity - 0.1, 0);
-    }
-    if (e.code === 'KeyT') {
-      ui.toggleShader();
-      shaderStatus.textContent = `Shader: ${ui.currentShaderName()}`;
-    }
-
     // Axis selection for transforms
     if (e.code === 'KeyX' || e.code === 'KeyY' || e.code === 'KeyZ') {
       axisState.axis = e.code === 'KeyX' ? 'x' : e.code === 'KeyY' ? 'y' : 'z';
@@ -444,17 +430,6 @@ export function setupInput({ renderer, camera, scene, terrain, cameraController,
     // Rotate around axis (R/F)
     if (e.code === 'KeyR') rotateSelection(axisState.axis, 1);
     if (e.code === 'KeyF') rotateSelection(axisState.axis, -1);
-  });
-
-  // Spotlight keyboard steering (axis-based)
-  window.addEventListener('keydown', e => {
-    const step = 0.5;
-    if (e.code === 'KeyI') spotlight.position.z -= step;
-    if (e.code === 'KeyK') spotlight.position.z += step;
-    if (e.code === 'KeyJ') spotlight.position.x -= step;
-    if (e.code === 'KeyL') spotlight.position.x += step;
-    if (e.code === 'KeyU') spotlight.position.y += step;
-    if (e.code === 'KeyO') spotlight.position.y -= step;
   });
 
   /**
@@ -568,4 +543,3 @@ export function setupInput({ renderer, camera, scene, terrain, cameraController,
     });
   }
 }
-
