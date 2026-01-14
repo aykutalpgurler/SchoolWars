@@ -870,10 +870,8 @@ function setupSpotlightPanel() {
     showHelpers.addEventListener('change', (e) => {
       toggleSpotlightHelpers(e.target.checked);
     });
-    // Initialize: show helpers by default
-    if (showHelpers.checked) {
-      toggleSpotlightHelpers(true);
-    }
+    // Initialize: helpers are disabled by default
+    toggleSpotlightHelpers(false);
   }
   
   if (debugMode) {
