@@ -75,17 +75,6 @@
       margin: 0;
       padding-left: 16px;
     }
-    .mini-status {
-      position: absolute;
-      bottom: 12px;
-      left: 12px;
-      background: rgba(0, 0, 0, 0.55);
-      padding: 8px 10px;
-      border-radius: 8px;
-      font-size: 12px;
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      pointer-events: none;
-    }
     .debug-panel {
       position: absolute;
       top: 12px;
@@ -121,7 +110,6 @@
 </head>
 <body>
   <div id="app"></div>
-  <div class="mini-status" id="shaderStatus">Shader: Phong</div>
   
   <!-- Buff Grid Scoreboard -->
   <div class="hud" id="buffScoreHud" style="position: absolute; right: 12px; bottom: 160px; left: auto; top: auto;">
@@ -144,7 +132,6 @@
       <li>Move camera: WASD/QE; rotate: Arrow keys or right-drag</li>
       <li>Select: Click; Drag-select: Drag left mouse</li>
       <li>Move units: Right-click ground</li>
-      <li>Shaders: T toggles Phong/Toon</li>
       <li>Spotlight: L toggle; [ / ] intensity; I/K/J/L/U/O move</li>
       <li>Axis select: X/Y/Z (translate axis), Shift+X/Y/Z (rotate axis)</li>
       <li>Transform selection: C/V translate ± along axis; R/F rotate ±</li>
@@ -152,6 +139,58 @@
       <li>Help: H</li>
     </ul>
   </div>
+  <script>
+    /**
+     * Show elimination message on screen with red font
+     */
+    function showEliminationMessage(message) {
+      // Create message element
+      const msgEl = document.createElement('div');
+      msgEl.textContent = message;
+      msgEl.style.position = 'fixed';
+      msgEl.style.top = '50%';
+      msgEl.style.left = '50%';
+      msgEl.style.transform = 'translate(-50%, -50%)';
+      msgEl.style.fontSize = '24px';
+      msgEl.style.fontWeight = 'bold';
+      msgEl.style.color = '#ff0000';
+      msgEl.style.textShadow = '1px 1px 2px rgba(0,0,0,0.8)';
+      msgEl.style.backgroundColor = 'rgba(0,0,0,0.7)';
+      msgEl.style.padding = '15px 30px';
+      msgEl.style.borderRadius = '8px';
+      msgEl.style.border = '2px solid #ff0000';
+      msgEl.style.zIndex = '10000';
+      msgEl.style.pointerEvents = 'none';
+      msgEl.style.animation = 'fadeInOut 4s ease-in-out';
+      
+      // Add CSS animation if not already present
+      if (!document.getElementById('eliminationMessageStyle')) {
+        const style = document.createElement('style');
+        style.id = 'eliminationMessageStyle';
+        style.textContent = `
+          @keyframes fadeInOut {
+            0% { opacity: 0; }
+            10% { opacity: 1; }
+            85% { opacity: 1; }
+            100% { opacity: 0; }
+          }
+        `;
+        document.head.appendChild(style);
+      }
+      
+      document.body.appendChild(msgEl);
+      
+      // Remove after animation
+      setTimeout(() => {
+        if (msgEl.parentNode) {
+          msgEl.parentNode.removeChild(msgEl);
+        }
+      }, 4000);
+    }
+    
+    // Expose to window for access from modules
+    window.showEliminationMessage = showEliminationMessage;
+  </script>
   <script type="module" src="./src/main.js"></script>
 </body>
 </html>

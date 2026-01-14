@@ -2,7 +2,6 @@ import { computePath, stepAlongPath } from './pathfinding.js';
 import { runAI } from './ai.js';
 import { GridCollisionSystem } from './collision.js';
 import { spawnUnitAtBase, TEAM_BASES, updateHealthBarVisual } from './units.js';
-import { showEliminationMessage } from './ui.js';
 
 export class GameLogic {
   constructor(scene, terrain) {
@@ -294,7 +293,9 @@ export class GameLogic {
     console.log(`${conqueringName} has eliminated ${eliminatedName}!`);
     
     // Show elimination message on screen
-    showEliminationMessage(`${eliminatedName} has been ELIMINATED by ${conqueringName}!`);
+    if (window.showEliminationMessage) {
+      window.showEliminationMessage(`${eliminatedName} has been ELIMINATED by ${conqueringName}!`);
+    }
     
     // Mark team as eliminated
     this.eliminatedTeams.add(eliminatedTeam);

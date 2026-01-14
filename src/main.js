@@ -5,7 +5,7 @@ import { setupLights } from './lightController.js';
 import { buildSceneContent } from './scene.js';
 import { GameLogic } from './gameLogic.js';
 import { setupInput } from './input.js';
-import { createUI } from './ui.js';
+import { getBuffGridScores } from './score.js';
 
 const appEl = document.getElementById('app');
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -31,7 +31,7 @@ const cameraController = setupCameraController(camera, renderer.domElement);
 const { directional, spotlight, spotlightTarget, spotlightUniforms } = setupLights(scene);
 
 // Initialize scene content asynchronously (to load camel model)
-let terrain, teams, game, input, ui;
+let terrain, teams, game, input;
 
 (async () => {
   const sceneContent = await buildSceneContent(scene);
@@ -42,15 +42,6 @@ let terrain, teams, game, input, ui;
   // Setup game logic
   game = new GameLogic(scene, terrain);
   game.setSceneEntities({ teams });
-
-  // Setup UI
-  ui = createUI(game, {
-    scene,
-    directional,
-    spotlight,
-    spotlightTarget,
-    terrain
-  });
 
   // Setup input
   input = setupInput({
@@ -103,9 +94,13 @@ function animate() {
     game.update(dt);
   }
 
-  // Update UI (scoreboard, etc)
-  if (ui) {
-    ui.update(dt);
+  // Update buff grid scores
+  if (terrain) {
+    const buffScoreText = document.getElementById('buffScoreText');
+    if (buffScoreText) {
+      const scores = getBuffGridScores(terrain);
+      buffScoreText.textContent = `Player: ${scores.team2 || 0} | AI1: ${scores.team1 || 0} | AI2: ${scores.team3 || 0}`;
+    }
   }
 
   // Update debug info if unit is selected
