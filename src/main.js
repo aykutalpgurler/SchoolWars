@@ -29,7 +29,7 @@ camera.position.set(14, 16, 14);
 camera.lookAt(0, 0, 0);
 
 const cameraController = setupCameraController(camera, renderer.domElement);
-const { directional, spotlight, spotlightTarget, updateSpotlightRotation, setSpotlightDebugMode, getSpotlightDebugMode, toggleSpotlightHelpers, updateSpotlightHelpers } = setupLights(scene);
+const { hemi, directional, fillLight, spotlight, spotlightTarget, updateSpotlightRotation, setSpotlightDebugMode, getSpotlightDebugMode, toggleSpotlightHelpers, updateSpotlightHelpers } = setupLights(scene);
 
 // Initialize scene content asynchronously (to load camel model)
 let terrain, teams, game, input;
@@ -58,13 +58,26 @@ let composer = null;
   composer = await initializeShaderController(renderer, scene, camera);
   
   // Initialize shader indicator
-  updateShaderIndicator(getShaderMode());
+  const initialShaderMode = getShaderMode();
+  updateShaderIndicator(initialShaderMode);
+  
+  // Apply configuration based on initial shader mode
+  setTimeout(() => {
+    if (initialShaderMode === SHADER_MODES.CEL_TOON) {
+      applyCelToonLightingConfig();
+    } else if (initialShaderMode === SHADER_MODES.NONE) {
+      applyNormalShaderLightingConfig();
+    }
+  }, 100);
   
   // Setup shader debug panel controls
   setupShaderDebugPanel();
   
   // Setup spotlight debug panel controls
   const spotlightPanelControls = setupSpotlightPanel();
+  
+  // Setup lights control panel
+  setupLightsPanel();
   
   // Diagnose lighting materials and ensure shadows are enabled
   diagnoseLighting(scene);
@@ -93,14 +106,44 @@ function animate() {
 
   cameraController.update(dt);
 
-  // Day/night cycle for polish (only if not in spotlight debug mode)
+  // Day/night cycle for polish (only if not in spotlight debug mode and user hasn't manually changed lights)
+  // Check if user has manually modified lights (stored in global flag)
   const isInSpotlightDebugMode = getSpotlightDebugMode && getSpotlightDebugMode() !== 0;
-  if (!isInSpotlightDebugMode) {
+  const lightsManuallyModified = window.__schoolwars?.lightsManuallyModified === true;
+  const dayNightCycleEnabled = document.getElementById('enableDayNightCycle')?.checked !== false;
+  
+  if (!isInSpotlightDebugMode && !lightsManuallyModified && dayNightCycleEnabled) {
     const time = performance.now() * 0.00005;
     directional.position.set(Math.sin(time) * 18, 14 + Math.cos(time) * 3, Math.cos(time) * 18);
     const daylight = 0.6 + 0.4 * Math.max(0.2, Math.cos(time));
     directional.intensity = daylight;
     scene.background.setHSL(0.58, 0.6, 0.65 * daylight);
+    
+    // Update UI sliders if they exist (so they reflect the auto-updated values)
+    const dirIntensity = document.getElementById('dirIntensity');
+    const dirIntensityValue = document.getElementById('dirIntensityValue');
+    if (dirIntensity && dirIntensityValue) {
+      dirIntensity.value = daylight.toFixed(2);
+      dirIntensityValue.textContent = daylight.toFixed(2);
+    }
+    const dirPosX = document.getElementById('dirPosX');
+    const dirPosXValue = document.getElementById('dirPosXValue');
+    if (dirPosX && dirPosXValue) {
+      dirPosX.value = (Math.sin(time) * 18).toFixed(1);
+      dirPosXValue.textContent = (Math.sin(time) * 18).toFixed(1);
+    }
+    const dirPosY = document.getElementById('dirPosY');
+    const dirPosYValue = document.getElementById('dirPosYValue');
+    if (dirPosY && dirPosYValue) {
+      dirPosY.value = (14 + Math.cos(time) * 3).toFixed(1);
+      dirPosYValue.textContent = (14 + Math.cos(time) * 3).toFixed(1);
+    }
+    const dirPosZ = document.getElementById('dirPosZ');
+    const dirPosZValue = document.getElementById('dirPosZValue');
+    if (dirPosZ && dirPosZValue) {
+      dirPosZ.value = (Math.cos(time) * 18).toFixed(1);
+      dirPosZValue.textContent = (Math.cos(time) * 18).toFixed(1);
+    }
   }
   
   // Update spotlight helpers if they exist
@@ -142,11 +185,220 @@ function animate() {
   }
 }
 
+// Apply Normal shader lighting configuration
+function applyNormalShaderLightingConfig() {
+  // Main directional light controls
+  const dirIntensity = document.getElementById('dirIntensity');
+  const dirIntensityValue = document.getElementById('dirIntensityValue');
+  const dirEnabled = document.getElementById('dirEnabled');
+  const fillIntensity = document.getElementById('fillIntensity');
+  const fillIntensityValue = document.getElementById('fillIntensityValue');
+  
+  // Apply main directional light (disabled)
+  if (dirEnabled && directional) {
+    dirEnabled.checked = false;
+    directional.intensity = 0;
+    dirEnabled.dispatchEvent(new Event('change'));
+  }
+  
+  // Apply fill directional light (intensity 1.11)
+  if (fillIntensity && fillIntensityValue && fillLight) {
+    fillIntensity.value = '1.11';
+    fillIntensityValue.textContent = '1.11';
+    fillLight.intensity = 1.11;
+    fillIntensity.dispatchEvent(new Event('input'));
+  }
+}
+
+// Apply Cel/Toon shader lighting configuration
+function applyCelToonLightingConfig() {
+  // Lights panel values
+  const enableDayNightCycle = document.getElementById('enableDayNightCycle');
+  const hemiIntensity = document.getElementById('hemiIntensity');
+  const hemiIntensityValue = document.getElementById('hemiIntensityValue');
+  const dirIntensity = document.getElementById('dirIntensity');
+  const dirIntensityValue = document.getElementById('dirIntensityValue');
+  const dirPosX = document.getElementById('dirPosX');
+  const dirPosXValue = document.getElementById('dirPosXValue');
+  const dirPosY = document.getElementById('dirPosY');
+  const dirPosYValue = document.getElementById('dirPosYValue');
+  const dirPosZ = document.getElementById('dirPosZ');
+  const dirPosZValue = document.getElementById('dirPosZValue');
+  const dirEnabled = document.getElementById('dirEnabled');
+  const fillIntensity = document.getElementById('fillIntensity');
+  const fillIntensityValue = document.getElementById('fillIntensityValue');
+  const fillPosX = document.getElementById('fillPosX');
+  const fillPosXValue = document.getElementById('fillPosXValue');
+  const fillPosY = document.getElementById('fillPosY');
+  const fillPosYValue = document.getElementById('fillPosYValue');
+  const fillPosZ = document.getElementById('fillPosZ');
+  const fillPosZValue = document.getElementById('fillPosZValue');
+  const fillEnabled = document.getElementById('fillEnabled');
+  
+  // Spotlight values
+  const spotlightIntensity = document.getElementById('spotlightIntensity');
+  const spotlightIntensityValue = document.getElementById('spotlightIntensityValue');
+  const spotlightEnabled = document.getElementById('spotlightEnabled');
+  
+  // Shader debug values
+  const celQuantizationLevels = document.getElementById('celQuantizationLevels');
+  const celQuantizationLevelsValue = document.getElementById('celQuantizationLevelsValue');
+  const celEdgeThreshold = document.getElementById('celEdgeThreshold');
+  const celEdgeThresholdValue = document.getElementById('celEdgeThresholdValue');
+  
+  // Apply day/night cycle
+  if (enableDayNightCycle) {
+    enableDayNightCycle.checked = false;
+    window.__schoolwars = window.__schoolwars || {};
+    window.__schoolwars.lightsManuallyModified = true;
+  }
+  
+  // Apply hemisphere light (intensity only, colors stay from picker)
+  if (hemiIntensity && hemiIntensityValue && hemi) {
+    hemiIntensity.value = '0.30';
+    hemiIntensityValue.textContent = '0.30';
+    hemi.intensity = 0.30;
+  }
+  
+  // Apply main directional light
+  if (dirIntensity && dirIntensityValue && directional) {
+    dirIntensity.value = '2.00';
+    dirIntensityValue.textContent = '2.00';
+    if (dirPosX && dirPosXValue) {
+      dirPosX.value = '15.0';
+      dirPosXValue.textContent = '15.0';
+    }
+    if (dirPosY && dirPosYValue) {
+      dirPosY.value = '12.3';
+      dirPosYValue.textContent = '12.3';
+    }
+    if (dirPosZ && dirPosZValue) {
+      dirPosZ.value = '-9.9';
+      dirPosZValue.textContent = '-9.9';
+    }
+    if (dirEnabled) {
+      dirEnabled.checked = true;
+    }
+    directional.intensity = 2.00;
+    directional.position.set(15.0, 12.3, -9.9);
+    directional.castShadow = false;
+  }
+  
+  // Apply fill directional light
+  if (fillIntensity && fillIntensityValue && fillLight) {
+    fillIntensity.value = '2.00';
+    fillIntensityValue.textContent = '2.00';
+    if (fillPosX && fillPosXValue) {
+      fillPosX.value = '-8.0';
+      fillPosXValue.textContent = '-8.0';
+    }
+    if (fillPosY && fillPosYValue) {
+      fillPosY.value = '10.0';
+      fillPosYValue.textContent = '10.0';
+    }
+    if (fillPosZ && fillPosZValue) {
+      fillPosZ.value = '-6.0';
+      fillPosZValue.textContent = '-6.0';
+    }
+    if (fillEnabled) {
+      fillEnabled.checked = true;
+    }
+    fillLight.intensity = 2.00;
+    fillLight.position.set(-8.0, 10.0, -6.0);
+    fillLight.castShadow = false;
+  }
+  
+  // Apply spotlight
+  if (spotlight && spotlightTarget && updateSpotlightRotation) {
+    const posX = document.getElementById('spotlightPosX');
+    const posXValue = document.getElementById('spotlightPosXValue');
+    const posY = document.getElementById('spotlightPosY');
+    const posYValue = document.getElementById('spotlightPosYValue');
+    const posZ = document.getElementById('spotlightPosZ');
+    const posZValue = document.getElementById('spotlightPosZValue');
+    const rotX = document.getElementById('spotlightRotX');
+    const rotXValue = document.getElementById('spotlightRotXValue');
+    const rotY = document.getElementById('spotlightRotY');
+    const rotYValue = document.getElementById('spotlightRotYValue');
+    const rotZ = document.getElementById('spotlightRotZ');
+    const rotZValue = document.getElementById('spotlightRotZValue');
+    
+    // Update UI sliders and trigger events to update spotlight
+    if (posX && posXValue) {
+      posX.value = '-1.0';
+      posXValue.textContent = '-1.0';
+      posX.dispatchEvent(new Event('input'));
+    }
+    if (posY && posYValue) {
+      posY.value = '19.8';
+      posYValue.textContent = '19.8';
+      posY.dispatchEvent(new Event('input'));
+    }
+    if (posZ && posZValue) {
+      posZ.value = '-1.0';
+      posZValue.textContent = '-1.0';
+      posZ.dispatchEvent(new Event('input'));
+    }
+    if (rotX && rotXValue) {
+      rotX.value = '-90';
+      rotXValue.textContent = '-90';
+      rotX.dispatchEvent(new Event('input'));
+    }
+    if (rotY && rotYValue) {
+      rotY.value = '0';
+      rotYValue.textContent = '0';
+      rotY.dispatchEvent(new Event('input'));
+    }
+    if (rotZ && rotZValue) {
+      rotZ.value = '0';
+      rotZValue.textContent = '0';
+      rotZ.dispatchEvent(new Event('input'));
+    }
+    
+    // Update spotlight shadow
+    spotlight.castShadow = true;
+    
+    if (spotlightIntensity && spotlightIntensityValue) {
+      spotlightIntensity.value = '50.0';
+      spotlightIntensityValue.textContent = '50.0';
+      spotlightIntensity.dispatchEvent(new Event('input'));
+    }
+    if (spotlightEnabled) {
+      spotlightEnabled.checked = true;
+      spotlightEnabled.dispatchEvent(new Event('change'));
+    }
+  }
+  
+  // Apply shader debug values
+  if (celQuantizationLevels && celQuantizationLevelsValue) {
+    celQuantizationLevels.value = '10';
+    celQuantizationLevelsValue.textContent = '10';
+    updateCelToonParams(10, undefined);
+  }
+  if (celEdgeThreshold && celEdgeThresholdValue) {
+    celEdgeThreshold.value = '0.50';
+    celEdgeThresholdValue.textContent = '0.50';
+    updateCelToonParams(undefined, 0.50);
+  }
+  
+  // Trigger update functions if they exist
+  if (window.__schoolwars?.spotlightPanelControls) {
+    // Spotlight panel update will be triggered by the value changes above
+  }
+}
+
 // Keyboard shortcuts for shader controls
 window.addEventListener('keydown', (e) => {
   if (e.code === 'KeyG' && composer) {
     const newMode = cycleShaderMode();
     updateShaderIndicator(newMode);
+    
+    // Apply configuration based on shader mode
+    if (newMode === SHADER_MODES.CEL_TOON) {
+      applyCelToonLightingConfig();
+    } else if (newMode === SHADER_MODES.NONE) {
+      applyNormalShaderLightingConfig();
+    }
   }
   // Toggle shader debug panel
   if (e.code === 'KeyT') {
@@ -168,6 +420,13 @@ window.addEventListener('keydown', (e) => {
     if (showHelpers) {
       showHelpers.checked = !showHelpers.checked;
       showHelpers.dispatchEvent(new Event('change'));
+    }
+  }
+  // Toggle lights control panel (I key)
+  if (e.code === 'KeyI') {
+    const lightsPanel = document.getElementById('lightsPanel');
+    if (lightsPanel) {
+      lightsPanel.classList.toggle('visible');
     }
   }
 });
@@ -611,6 +870,10 @@ function setupSpotlightPanel() {
     showHelpers.addEventListener('change', (e) => {
       toggleSpotlightHelpers(e.target.checked);
     });
+    // Initialize: show helpers by default
+    if (showHelpers.checked) {
+      toggleSpotlightHelpers(true);
+    }
   }
   
   if (debugMode) {
@@ -646,6 +909,10 @@ function setupSpotlightPanel() {
     forceLit.addEventListener('change', (e) => {
       forceLitMaterials(scene, e.target.checked);
     });
+    // Initialize: force lit materials by default
+    if (forceLit.checked) {
+      forceLitMaterials(scene, true);
+    }
   }
   
   if (forceShadows) {
@@ -667,6 +934,246 @@ function setupSpotlightPanel() {
   
   // Update diagnostic info periodically (in case scene changes)
   setInterval(updateDiagnosticInfo, 2000);
+}
+
+// Setup lights control panel
+function setupLightsPanel() {
+  // Day/night cycle toggle
+  const enableDayNightCycle = document.getElementById('enableDayNightCycle');
+  
+  // Hemisphere light controls
+  const hemiIntensity = document.getElementById('hemiIntensity');
+  const hemiIntensityValue = document.getElementById('hemiIntensityValue');
+  const hemiSkyColor = document.getElementById('hemiSkyColor');
+  const hemiGroundColor = document.getElementById('hemiGroundColor');
+  
+  // Main directional light controls
+  const dirIntensity = document.getElementById('dirIntensity');
+  const dirIntensityValue = document.getElementById('dirIntensityValue');
+  const dirPosX = document.getElementById('dirPosX');
+  const dirPosXValue = document.getElementById('dirPosXValue');
+  const dirPosY = document.getElementById('dirPosY');
+  const dirPosYValue = document.getElementById('dirPosYValue');
+  const dirPosZ = document.getElementById('dirPosZ');
+  const dirPosZValue = document.getElementById('dirPosZValue');
+  const dirColor = document.getElementById('dirColor');
+  const dirEnabled = document.getElementById('dirEnabled');
+  
+  // Fill light controls
+  const fillIntensity = document.getElementById('fillIntensity');
+  const fillIntensityValue = document.getElementById('fillIntensityValue');
+  const fillPosX = document.getElementById('fillPosX');
+  const fillPosXValue = document.getElementById('fillPosXValue');
+  const fillPosY = document.getElementById('fillPosY');
+  const fillPosYValue = document.getElementById('fillPosYValue');
+  const fillPosZ = document.getElementById('fillPosZ');
+  const fillPosZValue = document.getElementById('fillPosZValue');
+  const fillColor = document.getElementById('fillColor');
+  const fillEnabled = document.getElementById('fillEnabled');
+  
+  // Mark that lights have been manually modified (disables day/night cycle)
+  function markLightsModified() {
+    window.__schoolwars = window.__schoolwars || {};
+    window.__schoolwars.lightsManuallyModified = true;
+    // Uncheck the day/night cycle checkbox to show it's disabled
+    if (enableDayNightCycle) {
+      enableDayNightCycle.checked = false;
+    }
+  }
+  
+  // Helper function to update hemisphere light
+  function updateHemisphereLight() {
+    if (!hemi) return;
+    hemi.intensity = parseFloat(hemiIntensity.value);
+    hemi.color.setHex(parseInt(hemiSkyColor.value.replace('#', ''), 16));
+    hemi.groundColor.setHex(parseInt(hemiGroundColor.value.replace('#', ''), 16));
+    markLightsModified();
+  }
+  
+  // Helper function to update directional light
+  function updateDirectionalLight() {
+    if (!directional) return;
+    const intensity = parseFloat(dirIntensity.value);
+    directional.intensity = dirEnabled.checked ? intensity : 0;
+    directional.position.set(
+      parseFloat(dirPosX.value),
+      parseFloat(dirPosY.value),
+      parseFloat(dirPosZ.value)
+    );
+    directional.color.setHex(parseInt(dirColor.value.replace('#', ''), 16));
+    markLightsModified();
+  }
+  
+  // Helper function to update fill light
+  function updateFillLight() {
+    if (!fillLight) return;
+    const intensity = parseFloat(fillIntensity.value);
+    fillLight.intensity = fillEnabled.checked ? intensity : 0;
+    fillLight.position.set(
+      parseFloat(fillPosX.value),
+      parseFloat(fillPosY.value),
+      parseFloat(fillPosZ.value)
+    );
+    fillLight.color.setHex(parseInt(fillColor.value.replace('#', ''), 16));
+    markLightsModified();
+  }
+  
+  // Hemisphere light event listeners
+  if (hemiIntensity && hemiIntensityValue) {
+    hemiIntensity.addEventListener('input', (e) => {
+      const value = parseFloat(e.target.value);
+      hemiIntensityValue.textContent = value.toFixed(2);
+      updateHemisphereLight();
+    });
+  }
+  
+  if (hemiSkyColor) {
+    hemiSkyColor.addEventListener('input', () => {
+      updateHemisphereLight();
+    });
+  }
+  
+  if (hemiGroundColor) {
+    hemiGroundColor.addEventListener('input', () => {
+      updateHemisphereLight();
+    });
+  }
+  
+  // Directional light event listeners
+  if (dirIntensity && dirIntensityValue) {
+    dirIntensity.addEventListener('input', (e) => {
+      const value = parseFloat(e.target.value);
+      dirIntensityValue.textContent = value.toFixed(2);
+      updateDirectionalLight();
+    });
+  }
+  
+  if (dirPosX && dirPosXValue) {
+    dirPosX.addEventListener('input', (e) => {
+      const value = parseFloat(e.target.value);
+      dirPosXValue.textContent = value.toFixed(1);
+      updateDirectionalLight();
+    });
+  }
+  
+  if (dirPosY && dirPosYValue) {
+    dirPosY.addEventListener('input', (e) => {
+      const value = parseFloat(e.target.value);
+      dirPosYValue.textContent = value.toFixed(1);
+      updateDirectionalLight();
+    });
+  }
+  
+  if (dirPosZ && dirPosZValue) {
+    dirPosZ.addEventListener('input', (e) => {
+      const value = parseFloat(e.target.value);
+      dirPosZValue.textContent = value.toFixed(1);
+      updateDirectionalLight();
+    });
+  }
+  
+  if (dirColor) {
+    dirColor.addEventListener('input', () => {
+      updateDirectionalLight();
+    });
+  }
+  
+  if (dirEnabled) {
+    dirEnabled.addEventListener('change', () => {
+      updateDirectionalLight();
+    });
+  }
+  
+  // Fill light event listeners
+  if (fillIntensity && fillIntensityValue) {
+    fillIntensity.addEventListener('input', (e) => {
+      const value = parseFloat(e.target.value);
+      fillIntensityValue.textContent = value.toFixed(2);
+      updateFillLight();
+    });
+  }
+  
+  if (fillPosX && fillPosXValue) {
+    fillPosX.addEventListener('input', (e) => {
+      const value = parseFloat(e.target.value);
+      fillPosXValue.textContent = value.toFixed(1);
+      updateFillLight();
+    });
+  }
+  
+  if (fillPosY && fillPosYValue) {
+    fillPosY.addEventListener('input', (e) => {
+      const value = parseFloat(e.target.value);
+      fillPosYValue.textContent = value.toFixed(1);
+      updateFillLight();
+    });
+  }
+  
+  if (fillPosZ && fillPosZValue) {
+    fillPosZ.addEventListener('input', (e) => {
+      const value = parseFloat(e.target.value);
+      fillPosZValue.textContent = value.toFixed(1);
+      updateFillLight();
+    });
+  }
+  
+  if (fillColor) {
+    fillColor.addEventListener('input', () => {
+      updateFillLight();
+    });
+  }
+  
+  if (fillEnabled) {
+    fillEnabled.addEventListener('change', () => {
+      updateFillLight();
+    });
+  }
+  
+  // Day/night cycle toggle event listener
+  if (enableDayNightCycle) {
+    enableDayNightCycle.addEventListener('change', (e) => {
+      window.__schoolwars = window.__schoolwars || {};
+      if (e.target.checked) {
+        // Re-enable day/night cycle (reset manual modification flag)
+        window.__schoolwars.lightsManuallyModified = false;
+      } else {
+        // Disable day/night cycle (keep current manual settings)
+        window.__schoolwars.lightsManuallyModified = true;
+      }
+    });
+    
+    // Initialize: day/night cycle is disabled by default
+    window.__schoolwars = window.__schoolwars || {};
+    window.__schoolwars.lightsManuallyModified = true;
+  }
+  
+  // Initialize lights with current values (but don't mark as modified on init)
+  // Only mark as modified when user actually changes something
+  if (hemiIntensity && hemi) {
+    hemi.intensity = parseFloat(hemiIntensity.value);
+    hemi.color.setHex(parseInt(hemiSkyColor.value.replace('#', ''), 16));
+    hemi.groundColor.setHex(parseInt(hemiGroundColor.value.replace('#', ''), 16));
+  }
+  if (dirIntensity && directional) {
+    const intensity = parseFloat(dirIntensity.value);
+    directional.intensity = dirEnabled.checked ? intensity : 0;
+    directional.position.set(
+      parseFloat(dirPosX.value),
+      parseFloat(dirPosY.value),
+      parseFloat(dirPosZ.value)
+    );
+    directional.color.setHex(parseInt(dirColor.value.replace('#', ''), 16));
+  }
+  if (fillIntensity && fillLight) {
+    const intensity = parseFloat(fillIntensity.value);
+    fillLight.intensity = fillEnabled.checked ? intensity : 0;
+    fillLight.position.set(
+      parseFloat(fillPosX.value),
+      parseFloat(fillPosY.value),
+      parseFloat(fillPosZ.value)
+    );
+    fillLight.color.setHex(parseInt(fillColor.value.replace('#', ''), 16));
+  }
 }
 
 animate();

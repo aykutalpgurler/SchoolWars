@@ -25,12 +25,12 @@ export function setupLights(scene) {
   scene.add(fillLight);
 
   // User-controllable spotlight with 6 DOF
-  const spotlight = new THREE.SpotLight(0xffffff, 0); // Start with intensity 0 (off)
-  spotlight.position.set(10, 15, 10);
-  spotlight.angle = Math.PI / 6; // 30 degrees
-  spotlight.penumbra = 0.3;
-  spotlight.decay = 2;
-  spotlight.distance = 100;
+  const spotlight = new THREE.SpotLight(0xffffff, 20.0); // Start with intensity 20.0 (enabled)
+  spotlight.position.set(-1.0, 19.8, -1.0);
+  spotlight.angle = THREE.MathUtils.degToRad(45); // 45 degrees
+  spotlight.penumbra = 0.20;
+  spotlight.decay = 1.0;
+  spotlight.distance = 37;
   spotlight.castShadow = true;
   spotlight.shadow.mapSize.width = 2048;
   spotlight.shadow.mapSize.height = 2048;
@@ -85,8 +85,8 @@ export function setupLights(scene) {
     spotlightTarget.updateMatrixWorld(true);
   }
 
-  // Initialize with default rotation (pointing down and slightly forward)
-  updateSpotlightRotation(-45, 0, 0);
+  // Initialize with default rotation (pointing straight down)
+  updateSpotlightRotation(-90, 0, 0);
 
   // Debug mode: 0=Normal, 1=Spotlight Only, 2=Low Ambient
   let debugMode = 0;
@@ -137,7 +137,9 @@ export function setupLights(scene) {
   }
 
   return { 
+    hemi,
     directional,
+    fillLight,
     spotlight,
     spotlightTarget,
     updateSpotlightRotation,
