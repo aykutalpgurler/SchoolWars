@@ -199,6 +199,9 @@ function checkSpawnRush(game, teamId, units) {
   const enemyTeams = allTeams.filter(t => t !== teamId);
   
   for (const enemyTeam of enemyTeams) {
+    // Skip eliminated teams
+    if (game.eliminatedTeams.has(enemyTeam)) continue;
+    
     const enemyBase = TEAM_BASES[enemyTeam];
     if (!enemyBase) continue;
     
@@ -395,6 +398,9 @@ function executeSpawnRushStrategy(game, teamId, units) {
   let bestAdvantage = 2; // Need at least 3+ advantage
   
   for (const enemyTeam of enemyTeams) {
+    // Skip eliminated teams
+    if (game.eliminatedTeams.has(enemyTeam)) continue;
+    
     const enemyBase = TEAM_BASES[enemyTeam];
     if (!enemyBase) continue;
     
