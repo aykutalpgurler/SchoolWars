@@ -10,10 +10,52 @@ const TEAM_COLORS = {
   team3: 0xfacc15, // Yellow
 };
 
+// Team model pools (using same team names for compatibility)
+const TEAM_MODEL_POOLS = {
+  team1: ['Camel', 'Cat', 'Fox'], // Camel team (sphere/purple)
+  team2: ['Alien', 'Archer', 'Astronaut'], // Player team (cube/green) - old cobra
+  team3: ['Ant', 'Grasshopper', 'Beetle'], // Ant team (triangle/yellow)
+};
+
 // Cache for loaded models
 let camelModelCache = null;
+let catModelCache = null;
+let foxModelCache = null;
+let alienModelCache = null;
+let archerModelCache = null;
+let astronautModelCache = null;
 let antModelCache = null;
-let cobraModelCache = null;
+let grasshopperModelCache = null;
+let beetleModelCache = null;
+let cobraModelCache = null; // Keep for backward compatibility
+
+/**
+ * Get a random model name from a team's pool
+ */
+function getRandomModelFromTeam(teamId) {
+  const pool = TEAM_MODEL_POOLS[teamId];
+  if (!pool || pool.length === 0) return null;
+  return pool[Math.floor(Math.random() * pool.length)];
+}
+
+/**
+ * Get the cached model by name
+ */
+function getCachedModel(modelName) {
+  const cacheMap = {
+    'Camel': camelModelCache,
+    'Cat': catModelCache,
+    'Fox': foxModelCache,
+    'Alien': alienModelCache,
+    'Archer': archerModelCache,
+    'Astronaut': astronautModelCache,
+    'Ant': antModelCache,
+    'Grasshopper': grasshopperModelCache,
+    'Beetle': beetleModelCache,
+    'Cobra': cobraModelCache, // backward compatibility
+  };
+  return cacheMap[modelName] || null;
+}
 
 /**
  * Load the cobra model (cached after first load)
@@ -227,11 +269,15 @@ async function loadCobraModel() {
 }
 
 /**
- * Create a cobra unit from the loaded model (replaces cube)
+ * Create a player team unit from a randomly selected model (Alien, Archer, or Astronaut)
  */
 function makeCubeUnit(color) {
-  if (!cobraModelCache) {
-    console.error('Cobra model not loaded yet. Call loadCobraModel() first.');
+  // Randomly select a model from team2's pool
+  const modelName = getRandomModelFromTeam('team2');
+  const modelCache = getCachedModel(modelName);
+  
+  if (!modelCache) {
+    console.error(`${modelName} model not loaded yet. Call load${modelName}Model() first.`);
     // Fallback to cube if model not loaded
     const geo = new THREE.BoxGeometry(0.3, 0.3, 0.3);
     const mat = new THREE.MeshStandardMaterial({ color });
@@ -242,10 +288,10 @@ function makeCubeUnit(color) {
   }
 
   // Clone the cached model (deep clone to clone materials and textures)
-  const cobra = cobraModelCache.clone(true);
+  const unit = modelCache.clone(true);
 
   // Calculate bounding box to determine size for collision helper
-  const box = new THREE.Box3().setFromObject(cobra);
+  const box = new THREE.Box3().setFromObject(unit);
   const size = box.getSize(new THREE.Vector3());
   const maxDim = Math.max(size.x, size.y, size.z);
 
@@ -265,10 +311,10 @@ function makeCubeUnit(color) {
   // Position at center of the model
   const center = box.getCenter(new THREE.Vector3());
   collisionHelper.position.copy(center);
-  cobra.add(collisionHelper);
+  unit.add(collisionHelper);
 
   // Apply team color as a very subtle tint while preserving material properties
-  cobra.traverse((child) => {
+  unit.traverse((child) => {
     if (child.isMesh && child.material) {
       // Skip collision helper
       if (child.userData.isCollisionHelper) return;
@@ -321,7 +367,7 @@ function makeCubeUnit(color) {
     }
   });
 
-  return cobra;
+  return unit;
 }
 
 /**
@@ -515,11 +561,15 @@ async function loadAntModel() {
 }
 
 /**
- * Create an ant unit from the loaded model
+ * Create an ant team unit from a randomly selected model (Ant, Grasshopper, or Beetle)
  */
 function makeTriangleUnit(color) {
-  if (!antModelCache) {
-    console.error('Ant model not loaded yet. Call loadAntModel() first.');
+  // Randomly select a model from team3's pool
+  const modelName = getRandomModelFromTeam('team3');
+  const modelCache = getCachedModel(modelName);
+  
+  if (!modelCache) {
+    console.error(`${modelName} model not loaded yet. Call load${modelName}Model() first.`);
     // Fallback to triangle if model not loaded
     const geo = new THREE.TetrahedronGeometry(0.2, 0);
     const mat = new THREE.MeshStandardMaterial({ color });
@@ -530,10 +580,10 @@ function makeTriangleUnit(color) {
   }
 
   // Clone the cached model (deep clone to clone materials and textures)
-  const ant = antModelCache.clone(true);
+  const unit = modelCache.clone(true);
 
   // Apply team color as a very subtle tint while preserving dark appearance
-  ant.traverse((child) => {
+  unit.traverse((child) => {
     if (child.isMesh && child.material) {
       // Handle both single material and material arrays
       const materials = Array.isArray(child.material) ? child.material : [child.material];
@@ -584,7 +634,7 @@ function makeTriangleUnit(color) {
     }
   });
 
-  return ant;
+  return unit;
 }
 
 /**
@@ -799,11 +849,617 @@ async function loadCamelModel() {
 }
 
 /**
- * Create a camel unit from the loaded model
+ * Load the Cat model (cached after first load)
+ */
+async function loadCatModel() {
+  if (catModelCache) {
+    return catModelCache;
+  }
+
+  return new Promise((resolve, reject) => {
+    const mtlLoader = new MTLLoader();
+    const objLoader = new OBJLoader();
+
+    mtlLoader.setPath('./assets/desert-creatures/Cat/');
+    objLoader.setPath('./assets/desert-creatures/Cat/');
+
+    mtlLoader.load(
+      'Mesh_Cat.mtl',
+      (materials) => {
+        materials.preload();
+        Object.keys(materials.materials).forEach((materialName) => {
+          const mtlMaterial = materials.materials[materialName];
+          if (mtlMaterial && mtlMaterial.map) {
+            mtlMaterial.map.colorSpace = THREE.SRGBColorSpace;
+            mtlMaterial.map.flipY = false;
+          }
+        });
+        objLoader.setMaterials(materials);
+
+        objLoader.load(
+          'Mesh_Cat.obj',
+          (object) => {
+            object.traverse((child) => {
+              if (child.isMesh && child.material) {
+                if (child.geometry) {
+                  if (!child.geometry.attributes.normal || child.geometry.attributes.normal.count === 0) {
+                    child.geometry.computeVertexNormals();
+                  }
+                }
+                const materials = Array.isArray(child.material) ? child.material : [child.material];
+                const newMaterials = [];
+                materials.forEach((material) => {
+                  if (!material) return;
+                  const newMaterial = new THREE.MeshStandardMaterial();
+                  if (material.map) {
+                    newMaterial.map = material.map;
+                    newMaterial.map.colorSpace = THREE.SRGBColorSpace;
+                    newMaterial.map.flipY = false;
+                  }
+                  newMaterial.color = new THREE.Color(0xffffff);
+                  newMaterial.roughness = 0.8;
+                  newMaterial.metalness = 0.0;
+                  newMaterial.flatShading = true;
+                  newMaterials.push(newMaterial);
+                });
+                child.material = Array.isArray(child.material) ? newMaterials : newMaterials[0];
+                child.castShadow = true;
+                child.receiveShadow = true;
+              }
+            });
+
+            const box = new THREE.Box3().setFromObject(object);
+            const size = box.getSize(new THREE.Vector3());
+            const maxDim = Math.max(size.x, size.y, size.z);
+            const targetSize = 1.6; // Same as Camel team
+            const scale = targetSize / maxDim;
+            object.scale.set(scale, scale, scale);
+            box.setFromObject(object);
+            const min = box.min;
+            object.position.y = -min.y;
+            const center = box.getCenter(new THREE.Vector3());
+            object.position.x = -center.x;
+            object.position.z = -center.z;
+
+            catModelCache = object;
+            resolve(object);
+          },
+          undefined,
+          reject
+        );
+      },
+      undefined,
+      reject
+    );
+  });
+}
+
+/**
+ * Load the Fox model (cached after first load)
+ */
+async function loadFoxModel() {
+  if (foxModelCache) {
+    return foxModelCache;
+  }
+
+  return new Promise((resolve, reject) => {
+    const mtlLoader = new MTLLoader();
+    const objLoader = new OBJLoader();
+
+    mtlLoader.setPath('./assets/desert-creatures/Fox/');
+    objLoader.setPath('./assets/desert-creatures/Fox/');
+
+    mtlLoader.load(
+      'Fox.mtl',
+      (materials) => {
+        materials.preload();
+        Object.keys(materials.materials).forEach((materialName) => {
+          const mtlMaterial = materials.materials[materialName];
+          if (mtlMaterial && mtlMaterial.map) {
+            mtlMaterial.map.colorSpace = THREE.SRGBColorSpace;
+            mtlMaterial.map.flipY = false;
+          }
+        });
+        objLoader.setMaterials(materials);
+
+        objLoader.load(
+          'Fox.obj',
+          (object) => {
+            object.traverse((child) => {
+              if (child.isMesh && child.material) {
+                if (child.geometry) {
+                  if (!child.geometry.attributes.normal || child.geometry.attributes.normal.count === 0) {
+                    child.geometry.computeVertexNormals();
+                  }
+                }
+                const materials = Array.isArray(child.material) ? child.material : [child.material];
+                const newMaterials = [];
+                materials.forEach((material) => {
+                  if (!material) return;
+                  const newMaterial = new THREE.MeshStandardMaterial();
+                  if (material.map) {
+                    newMaterial.map = material.map;
+                    newMaterial.map.colorSpace = THREE.SRGBColorSpace;
+                    newMaterial.map.flipY = false;
+                  }
+                  newMaterial.color = new THREE.Color(0xffffff);
+                  newMaterial.roughness = 0.8;
+                  newMaterial.metalness = 0.0;
+                  newMaterial.flatShading = true;
+                  newMaterials.push(newMaterial);
+                });
+                child.material = Array.isArray(child.material) ? newMaterials : newMaterials[0];
+                child.castShadow = true;
+                child.receiveShadow = true;
+              }
+            });
+
+            const box = new THREE.Box3().setFromObject(object);
+            const size = box.getSize(new THREE.Vector3());
+            const maxDim = Math.max(size.x, size.y, size.z);
+            const targetSize = 1.6; // Same as Camel team
+            const scale = targetSize / maxDim;
+            object.scale.set(scale, scale, scale);
+            box.setFromObject(object);
+            const min = box.min;
+            object.position.y = -min.y;
+            const center = box.getCenter(new THREE.Vector3());
+            object.position.x = -center.x;
+            object.position.z = -center.z;
+
+            foxModelCache = object;
+            resolve(object);
+          },
+          undefined,
+          reject
+        );
+      },
+      undefined,
+      reject
+    );
+  });
+}
+
+/**
+ * Load the Alien model (cached after first load)
+ */
+async function loadAlienModel() {
+  if (alienModelCache) {
+    return alienModelCache;
+  }
+
+  return new Promise((resolve, reject) => {
+    const mtlLoader = new MTLLoader();
+    const objLoader = new OBJLoader();
+
+    mtlLoader.setPath('./assets/desert-creatures/Alien/');
+    objLoader.setPath('./assets/desert-creatures/Alien/');
+
+    mtlLoader.load(
+      'Alien.mtl',
+      (materials) => {
+        materials.preload();
+        Object.keys(materials.materials).forEach((materialName) => {
+          const mtlMaterial = materials.materials[materialName];
+          if (mtlMaterial && mtlMaterial.map) {
+            mtlMaterial.map.colorSpace = THREE.SRGBColorSpace;
+            mtlMaterial.map.flipY = false;
+          }
+        });
+        objLoader.setMaterials(materials);
+
+        objLoader.load(
+          'Alien.obj',
+          (object) => {
+            object.traverse((child) => {
+              if (child.isMesh && child.material) {
+                if (child.geometry) {
+                  if (!child.geometry.attributes.normal || child.geometry.attributes.normal.count === 0) {
+                    child.geometry.computeVertexNormals();
+                  }
+                }
+                const materials = Array.isArray(child.material) ? child.material : [child.material];
+                const newMaterials = [];
+                materials.forEach((material) => {
+                  if (!material) return;
+                  const newMaterial = new THREE.MeshStandardMaterial();
+                  if (material.map) {
+                    newMaterial.map = material.map;
+                    newMaterial.map.colorSpace = THREE.SRGBColorSpace;
+                    newMaterial.map.flipY = false;
+                  }
+                  newMaterial.color = new THREE.Color(0xffffff);
+                  newMaterial.roughness = 0.8;
+                  newMaterial.metalness = 0.0;
+                  newMaterial.flatShading = true;
+                  newMaterials.push(newMaterial);
+                });
+                child.material = Array.isArray(child.material) ? newMaterials : newMaterials[0];
+                child.castShadow = true;
+                child.receiveShadow = true;
+              }
+            });
+
+            const box = new THREE.Box3().setFromObject(object);
+            const size = box.getSize(new THREE.Vector3());
+            const maxDim = Math.max(size.x, size.y, size.z);
+            const targetSize = 1.2; // Same as Player team (old Cobra)
+            const scale = targetSize / maxDim;
+            object.scale.set(scale, scale, scale);
+            box.setFromObject(object);
+            const min = box.min;
+            object.position.y = -min.y;
+            const center = box.getCenter(new THREE.Vector3());
+            object.position.x = -center.x;
+            object.position.z = -center.z;
+
+            alienModelCache = object;
+            resolve(object);
+          },
+          undefined,
+          reject
+        );
+      },
+      undefined,
+      reject
+    );
+  });
+}
+
+/**
+ * Load the Archer model (cached after first load)
+ */
+async function loadArcherModel() {
+  if (archerModelCache) {
+    return archerModelCache;
+  }
+
+  return new Promise((resolve, reject) => {
+    const mtlLoader = new MTLLoader();
+    const objLoader = new OBJLoader();
+
+    mtlLoader.setPath('./assets/desert-creatures/Archer/');
+    objLoader.setPath('./assets/desert-creatures/Archer/');
+
+    mtlLoader.load(
+      'Archer.mtl',
+      (materials) => {
+        materials.preload();
+        Object.keys(materials.materials).forEach((materialName) => {
+          const mtlMaterial = materials.materials[materialName];
+          if (mtlMaterial && mtlMaterial.map) {
+            mtlMaterial.map.colorSpace = THREE.SRGBColorSpace;
+            mtlMaterial.map.flipY = false;
+          }
+        });
+        objLoader.setMaterials(materials);
+
+        objLoader.load(
+          'Archer.obj',
+          (object) => {
+            object.traverse((child) => {
+              if (child.isMesh && child.material) {
+                if (child.geometry) {
+                  if (!child.geometry.attributes.normal || child.geometry.attributes.normal.count === 0) {
+                    child.geometry.computeVertexNormals();
+                  }
+                }
+                const materials = Array.isArray(child.material) ? child.material : [child.material];
+                const newMaterials = [];
+                materials.forEach((material) => {
+                  if (!material) return;
+                  const newMaterial = new THREE.MeshStandardMaterial();
+                  if (material.map) {
+                    newMaterial.map = material.map;
+                    newMaterial.map.colorSpace = THREE.SRGBColorSpace;
+                    newMaterial.map.flipY = false;
+                  }
+                  newMaterial.color = new THREE.Color(0xffffff);
+                  newMaterial.roughness = 0.8;
+                  newMaterial.metalness = 0.0;
+                  newMaterial.flatShading = true;
+                  newMaterials.push(newMaterial);
+                });
+                child.material = Array.isArray(child.material) ? newMaterials : newMaterials[0];
+                child.castShadow = true;
+                child.receiveShadow = true;
+              }
+            });
+
+            const box = new THREE.Box3().setFromObject(object);
+            const size = box.getSize(new THREE.Vector3());
+            const maxDim = Math.max(size.x, size.y, size.z);
+            const targetSize = 1.2; // Same as Player team (old Cobra)
+            const scale = targetSize / maxDim;
+            object.scale.set(scale, scale, scale);
+            box.setFromObject(object);
+            const min = box.min;
+            object.position.y = -min.y;
+            const center = box.getCenter(new THREE.Vector3());
+            object.position.x = -center.x;
+            object.position.z = -center.z;
+
+            archerModelCache = object;
+            resolve(object);
+          },
+          undefined,
+          reject
+        );
+      },
+      undefined,
+      reject
+    );
+  });
+}
+
+/**
+ * Load the Astronaut model (cached after first load)
+ */
+async function loadAstronautModel() {
+  if (astronautModelCache) {
+    return astronautModelCache;
+  }
+
+  return new Promise((resolve, reject) => {
+    const mtlLoader = new MTLLoader();
+    const objLoader = new OBJLoader();
+
+    mtlLoader.setPath('./assets/desert-creatures/Astronaut/');
+    objLoader.setPath('./assets/desert-creatures/Astronaut/');
+
+    mtlLoader.load(
+      'Astronaut.mtl',
+      (materials) => {
+        materials.preload();
+        Object.keys(materials.materials).forEach((materialName) => {
+          const mtlMaterial = materials.materials[materialName];
+          if (mtlMaterial && mtlMaterial.map) {
+            mtlMaterial.map.colorSpace = THREE.SRGBColorSpace;
+            mtlMaterial.map.flipY = false;
+          }
+        });
+        objLoader.setMaterials(materials);
+
+        objLoader.load(
+          'Astronaut.obj',
+          (object) => {
+            object.traverse((child) => {
+              if (child.isMesh && child.material) {
+                if (child.geometry) {
+                  if (!child.geometry.attributes.normal || child.geometry.attributes.normal.count === 0) {
+                    child.geometry.computeVertexNormals();
+                  }
+                }
+                const materials = Array.isArray(child.material) ? child.material : [child.material];
+                const newMaterials = [];
+                materials.forEach((material) => {
+                  if (!material) return;
+                  const newMaterial = new THREE.MeshStandardMaterial();
+                  if (material.map) {
+                    newMaterial.map = material.map;
+                    newMaterial.map.colorSpace = THREE.SRGBColorSpace;
+                    newMaterial.map.flipY = false;
+                  }
+                  newMaterial.color = new THREE.Color(0xffffff);
+                  newMaterial.roughness = 0.8;
+                  newMaterial.metalness = 0.0;
+                  newMaterial.flatShading = true;
+                  newMaterials.push(newMaterial);
+                });
+                child.material = Array.isArray(child.material) ? newMaterials : newMaterials[0];
+                child.castShadow = true;
+                child.receiveShadow = true;
+              }
+            });
+
+            const box = new THREE.Box3().setFromObject(object);
+            const size = box.getSize(new THREE.Vector3());
+            const maxDim = Math.max(size.x, size.y, size.z);
+            const targetSize = 1.2; // Same as Player team (old Cobra)
+            const scale = targetSize / maxDim;
+            object.scale.set(scale, scale, scale);
+            box.setFromObject(object);
+            const min = box.min;
+            object.position.y = -min.y;
+            const center = box.getCenter(new THREE.Vector3());
+            object.position.x = -center.x;
+            object.position.z = -center.z;
+
+            astronautModelCache = object;
+            resolve(object);
+          },
+          undefined,
+          reject
+        );
+      },
+      undefined,
+      reject
+    );
+  });
+}
+
+/**
+ * Load the Grasshopper model (cached after first load)
+ */
+async function loadGrasshopperModel() {
+  if (grasshopperModelCache) {
+    return grasshopperModelCache;
+  }
+
+  return new Promise((resolve, reject) => {
+    const mtlLoader = new MTLLoader();
+    const objLoader = new OBJLoader();
+
+    mtlLoader.setPath('./assets/desert-creatures/Grasshopper/');
+    objLoader.setPath('./assets/desert-creatures/Grasshopper/');
+
+    mtlLoader.load(
+      'grasshopper.mtl',
+      (materials) => {
+        materials.preload();
+        Object.keys(materials.materials).forEach((materialName) => {
+          const mtlMaterial = materials.materials[materialName];
+          if (mtlMaterial && mtlMaterial.map) {
+            mtlMaterial.map.colorSpace = THREE.SRGBColorSpace;
+            mtlMaterial.map.flipY = false;
+          }
+        });
+        objLoader.setMaterials(materials);
+
+        objLoader.load(
+          'grasshopper.obj',
+          (object) => {
+            object.traverse((child) => {
+              if (child.isMesh && child.material) {
+                if (child.geometry) {
+                  if (!child.geometry.attributes.normal || child.geometry.attributes.normal.count === 0) {
+                    child.geometry.computeVertexNormals();
+                  }
+                }
+                const materials = Array.isArray(child.material) ? child.material : [child.material];
+                const newMaterials = [];
+                materials.forEach((material) => {
+                  if (!material) return;
+                  const newMaterial = new THREE.MeshStandardMaterial();
+                  if (material.map) {
+                    newMaterial.map = material.map;
+                    newMaterial.map.colorSpace = THREE.SRGBColorSpace;
+                    newMaterial.map.flipY = false;
+                  }
+                  newMaterial.color = new THREE.Color(0xffffff);
+                  newMaterial.roughness = 0.7;
+                  newMaterial.metalness = 0.1;
+                  newMaterial.flatShading = true;
+                  newMaterials.push(newMaterial);
+                });
+                child.material = Array.isArray(child.material) ? newMaterials : newMaterials[0];
+                child.castShadow = true;
+                child.receiveShadow = true;
+              }
+            });
+
+            const box = new THREE.Box3().setFromObject(object);
+            const size = box.getSize(new THREE.Vector3());
+            const maxDim = Math.max(size.x, size.y, size.z);
+            const targetSize = 1.4; // Same as Ant team
+            const scale = targetSize / maxDim;
+            object.scale.set(scale, scale, scale);
+            box.setFromObject(object);
+            const min = box.min;
+            object.position.y = -min.y;
+            const center = box.getCenter(new THREE.Vector3());
+            object.position.x = -center.x;
+            object.position.z = -center.z;
+
+            grasshopperModelCache = object;
+            resolve(object);
+          },
+          undefined,
+          reject
+        );
+      },
+      undefined,
+      reject
+    );
+  });
+}
+
+/**
+ * Load the Beetle model (cached after first load)
+ */
+async function loadBeetleModel() {
+  if (beetleModelCache) {
+    return beetleModelCache;
+  }
+
+  return new Promise((resolve, reject) => {
+    const mtlLoader = new MTLLoader();
+    const objLoader = new OBJLoader();
+
+    mtlLoader.setPath('./assets/desert-creatures/Beetle/');
+    objLoader.setPath('./assets/desert-creatures/Beetle/');
+
+    mtlLoader.load(
+      'Mesh_Beetle.mtl',
+      (materials) => {
+        materials.preload();
+        Object.keys(materials.materials).forEach((materialName) => {
+          const mtlMaterial = materials.materials[materialName];
+          if (mtlMaterial && mtlMaterial.map) {
+            mtlMaterial.map.colorSpace = THREE.SRGBColorSpace;
+            mtlMaterial.map.flipY = false;
+          }
+        });
+        objLoader.setMaterials(materials);
+
+        objLoader.load(
+          'Mesh_Beetle.obj',
+          (object) => {
+            object.traverse((child) => {
+              if (child.isMesh && child.material) {
+                if (child.geometry) {
+                  if (!child.geometry.attributes.normal || child.geometry.attributes.normal.count === 0) {
+                    child.geometry.computeVertexNormals();
+                  }
+                }
+                const materials = Array.isArray(child.material) ? child.material : [child.material];
+                const newMaterials = [];
+                materials.forEach((material) => {
+                  if (!material) return;
+                  const newMaterial = new THREE.MeshStandardMaterial();
+                  if (material.map) {
+                    newMaterial.map = material.map;
+                    newMaterial.map.colorSpace = THREE.SRGBColorSpace;
+                    newMaterial.map.flipY = false;
+                  }
+                  newMaterial.color = new THREE.Color(0xffffff);
+                  newMaterial.roughness = 0.7;
+                  newMaterial.metalness = 0.1;
+                  newMaterial.flatShading = true;
+                  newMaterials.push(newMaterial);
+                });
+                child.material = Array.isArray(child.material) ? newMaterials : newMaterials[0];
+                child.castShadow = true;
+                child.receiveShadow = true;
+              }
+            });
+
+            const box = new THREE.Box3().setFromObject(object);
+            const size = box.getSize(new THREE.Vector3());
+            const maxDim = Math.max(size.x, size.y, size.z);
+            const targetSize = 1.4; // Same as Ant team
+            const scale = targetSize / maxDim;
+            object.scale.set(scale, scale, scale);
+            box.setFromObject(object);
+            const min = box.min;
+            object.position.y = -min.y;
+            const center = box.getCenter(new THREE.Vector3());
+            object.position.x = -center.x;
+            object.position.z = -center.z;
+
+            beetleModelCache = object;
+            resolve(object);
+          },
+          undefined,
+          reject
+        );
+      },
+      undefined,
+      reject
+    );
+  });
+}
+
+/**
+ * Create a camel team unit from a randomly selected model (Camel, Cat, or Fox)
  */
 function makeSphereUnit(color) {
-  if (!camelModelCache) {
-    console.error('Camel model not loaded yet. Call loadCamelModel() first.');
+  // Randomly select a model from team1's pool
+  const modelName = getRandomModelFromTeam('team1');
+  const modelCache = getCachedModel(modelName);
+  
+  if (!modelCache) {
+    console.error(`${modelName} model not loaded yet. Call load${modelName}Model() first.`);
     // Fallback to sphere if model not loaded
     const geo = new THREE.SphereGeometry(0.2, 12, 12);
     const mat = new THREE.MeshStandardMaterial({ color });
@@ -814,10 +1470,10 @@ function makeSphereUnit(color) {
   }
 
   // Clone the cached model (deep clone to clone materials and textures)
-  const camel = camelModelCache.clone(true);
+  const unit = modelCache.clone(true);
 
   // Apply team color as a very subtle tint while preserving material properties
-  camel.traverse((child) => {
+  unit.traverse((child) => {
     if (child.isMesh && child.material) {
       // Handle both single material and material arrays
       const materials = Array.isArray(child.material) ? child.material : [child.material];
@@ -868,7 +1524,7 @@ function makeSphereUnit(color) {
     }
   });
 
-  return camel;
+  return unit;
 }
 
 /**
@@ -1210,14 +1866,23 @@ export function spawnUnitAtBase(scene, terrain, teamId, buffGridsOwned = 0) {
 
 /**
  * Spawn all teams on the terrain
- * Team 1: camel (replaces sphere), Team 2: cube, Team 3: ant (replaces triangle)
+ * Team 1: camel team (Camel, Cat, Fox), Team 2: player team (Alien, Archer, Astronaut), Team 3: ant team (Ant, Grasshopper, Beetle)
  */
 export async function spawnTeams(scene, terrain) {
-  // Load models before creating units
+  // Load all models before creating units
   await Promise.all([
+    // Team 1 models (Camel team)
     loadCamelModel(),
+    loadCatModel(),
+    loadFoxModel(),
+    // Team 2 models (Player team)
+    loadAlienModel(),
+    loadArcherModel(),
+    loadAstronautModel(),
+    // Team 3 models (Ant team)
     loadAntModel(),
-    loadCobraModel()
+    loadGrasshopperModel(),
+    loadBeetleModel()
   ]);
 
   const teams = {
