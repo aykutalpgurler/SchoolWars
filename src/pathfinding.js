@@ -198,8 +198,8 @@ export function stepAlongPath(unit, dt, path, speed = 2.0) {
   while (angleDiff > Math.PI) angleDiff -= 2 * Math.PI;
   while (angleDiff < -Math.PI) angleDiff += 2 * Math.PI;
   
-  // Smoothly interpolate rotation (adjust 8.0 for faster/slower turning)
-  const rotationSpeed = 8.0;
+  // Smoothly interpolate rotation (lower value = less sliding)
+  const rotationSpeed = 4.0; // Reduced from 8.0 to reduce sliding effect
   unit.rotation.y += angleDiff * Math.min(1, rotationSpeed * dt);
   
   // Add subtle bob animation while moving

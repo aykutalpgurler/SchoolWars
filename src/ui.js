@@ -1,4 +1,5 @@
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
+import { getBuffGridScores } from './score.js';
 
 // Simple shader loader (fetches GLSL text once)
 const shaderCache = new Map();
@@ -11,24 +12,14 @@ async function loadShader(path) {
 }
 
 export function createUI(game, { scene, directional, spotlight, spotlightTarget, terrain }) {
-  const scoreText = document.getElementById('scoreText');
   const shaderStatus = document.getElementById('shaderStatus');
+  const buffScoreText = document.getElementById('buffScoreText');
   const appEl = document.getElementById('app');
-
-  // Minimap canvas
-  const minimap = document.createElement('canvas');
-  minimap.width = 220;
-  minimap.height = 140;
-  minimap.style.position = 'absolute';
-  minimap.style.right = '12px';
-  minimap.style.bottom = '12px';
-  minimap.style.border = '1px solid rgba(255,255,255,0.15)';
-  minimap.style.background = 'rgba(0,0,0,0.65)';
-  minimap.style.borderRadius = '10px';
-  minimap.style.backdropFilter = 'blur(4px)';
-  minimap.style.pointerEvents = 'none';
-  appEl.appendChild(minimap);
-  const mctx = minimap.getContext('2d');
+  
+  console.log('[UI] createUI called with terrain:', terrain ? 'defined' : 'undefined');
+  if (terrain) {
+    console.log('[UI] terrain.grid:', terrain.grid ? terrain.grid.length + ' cells' : 'undefined');
+  }
 
   let currentShader = 'phong';
   let ready = false;
@@ -144,61 +135,64 @@ export function createUI(game, { scene, directional, spotlight, spotlightTarget,
   }
 
   function update(dt) {
-    if (scoreText) {
-      const s = game.scores;
-      scoreText.textContent = `Player: ${s.player.toFixed(0)} | AI1: ${s.ai1.toFixed(0)} | AI2: ${s.ai2.toFixed(0)}`;
+    // Update buff grid scores by directly scanning terrain
+    if (buffScoreText && terrain) {
+      const scores = getBuffGridScores(terrain);
+      // Player controls team2 (cube units); AI controls team1 + team3
+      buffScoreText.textContent = `Player: ${scores.team2 || 0} | AI1: ${scores.team1 || 0} | AI2: ${scores.team3 || 0}`;
     }
+    
     updateLightUniforms();
-    drawMinimap();
   }
 
   return { update, toggleShader, currentShaderName };
+}
 
-  function drawMinimap() {
-    if (!terrain?.grid) return;
-    mctx.clearRect(0, 0, minimap.width, minimap.height);
-    mctx.fillStyle = 'rgba(0,0,0,0.55)';
-    mctx.fillRect(0, 0, minimap.width, minimap.height);
-
-    // Calculate bounds from grid
-    const GRID_SIZE = terrain.GRID_SIZE || 16;
-    const CELL_SIZE = terrain.CELL_SIZE || 1.0;
-    const halfSize = (GRID_SIZE * CELL_SIZE) / 2;
-    const bounds = {
-      minX: -halfSize,
-      maxX: halfSize,
-      minZ: -halfSize,
-      maxZ: halfSize,
-    };
-    
-    const pad = 12;
-    const scaleX = (minimap.width - pad * 2) / (bounds.maxX - bounds.minX + 0.0001);
-    const scaleZ = (minimap.height - pad * 2) / (bounds.maxZ - bounds.minZ + 0.0001);
-
-    // Draw grid cells
-    terrain.grid.forEach(cell => {
-      const x = pad + (cell.x - bounds.minX) * scaleX;
-      const z = pad + (cell.z - bounds.minZ) * scaleZ;
-      mctx.fillStyle = cell.walkable ? '#2d864d' : '#666666';
-      const cellSize = CELL_SIZE * scaleX;
-      mctx.fillRect(x - cellSize / 2, z - cellSize / 2, cellSize, cellSize);
-    });
-
-    // Units
-    const drawUnits = (teamId, color) => {
-      const units = game.teams[teamId] || [];
-      mctx.fillStyle = color;
-      units.forEach(u => {
-        const x = pad + (u.position.x - bounds.minX) * scaleX;
-        const z = pad + (u.position.z - bounds.minZ) * scaleZ;
-        mctx.beginPath();
-        mctx.arc(x, z, 3, 0, Math.PI * 2);
-        mctx.fill();
-      });
-    };
-    drawUnits('player', '#a855f7');
-    drawUnits('ai1', '#22c55e');
-    drawUnits('ai2', '#facc15');
+/**
+ * Show elimination message on screen with red font
+ */
+export function showEliminationMessage(message) {
+  // Create message element
+  const msgEl = document.createElement('div');
+  msgEl.textContent = message;
+  msgEl.style.position = 'fixed';
+  msgEl.style.top = '50%';
+  msgEl.style.left = '50%';
+  msgEl.style.transform = 'translate(-50%, -50%)';
+  msgEl.style.fontSize = '24px';
+  msgEl.style.fontWeight = 'bold';
+  msgEl.style.color = '#ff0000';
+  msgEl.style.textShadow = '1px 1px 2px rgba(0,0,0,0.8)';
+  msgEl.style.backgroundColor = 'rgba(0,0,0,0.7)';
+  msgEl.style.padding = '15px 30px';
+  msgEl.style.borderRadius = '8px';
+  msgEl.style.border = '2px solid #ff0000';
+  msgEl.style.zIndex = '10000';
+  msgEl.style.pointerEvents = 'none';
+  msgEl.style.animation = 'fadeInOut 4s ease-in-out';
+  
+  // Add CSS animation if not already present
+  if (!document.getElementById('eliminationMessageStyle')) {
+    const style = document.createElement('style');
+    style.id = 'eliminationMessageStyle';
+    style.textContent = `
+      @keyframes fadeInOut {
+        0% { opacity: 0; }
+        10% { opacity: 1; }
+        85% { opacity: 1; }
+        100% { opacity: 0; }
+      }
+    `;
+    document.head.appendChild(style);
   }
+  
+  document.body.appendChild(msgEl);
+  
+  // Remove after animation
+  setTimeout(() => {
+    if (msgEl.parentNode) {
+      msgEl.parentNode.removeChild(msgEl);
+    }
+  }, 4000);
 }
 

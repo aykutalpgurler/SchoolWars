@@ -37,7 +37,12 @@ export function runAI(game) {
       return; // Fighting enemies, skip other strategies
     }
     
-    // Check for spawn defense (second priority)
+    // Check if AI should rush player spawn (second highest priority)
+    if (checkSpawnRush(game, teamId, units)) {
+      return; // Rushing player spawn, skip other strategies
+    }
+    
+    // Check for spawn defense (third priority)
     if (checkSpawnDefense(game, teamId, units)) {
       return; // Defending spawn, skip other strategies
     }
@@ -179,6 +184,61 @@ function checkSpawnDefense(game, teamId, units) {
 }
 
 /**
+ * Check if AI should rush enemy spawn (any enemy team)
+ * Returns true if spawn rush was initiated
+ */
+function checkSpawnRush(game, teamId, units) {
+  const TEAM_BASES = {
+    team1: { startRow: 2, startCol: 2 },
+    team2: { startRow: 2, startCol: 13 },
+    team3: { startRow: 13, startCol: 2 },
+  };
+  
+  // Check all enemy teams
+  const allTeams = ['team1', 'team2', 'team3'];
+  const enemyTeams = allTeams.filter(t => t !== teamId);
+  
+  for (const enemyTeam of enemyTeams) {
+    const enemyBase = TEAM_BASES[enemyTeam];
+    if (!enemyBase) continue;
+    
+    const enemySpawnCell = game.terrain.getCell(enemyBase.startRow, enemyBase.startCol);
+    if (!enemySpawnCell) continue;
+    
+    // Count units near enemy spawn (within 3 cells)
+    const checkRadius = 3;
+    let aiUnitsNearSpawn = 0;
+    let enemyUnitsNearSpawn = 0;
+    
+    for (let dr = -checkRadius; dr <= checkRadius; dr++) {
+      for (let dc = -checkRadius; dc <= checkRadius; dc++) {
+        const cell = game.terrain.getCell(enemyBase.startRow + dr, enemyBase.startCol + dc);
+        if (cell && cell.units) {
+          cell.units.forEach(u => {
+            if (!u || !u.userData || !u.userData.team) return;
+            if (u.userData.team === teamId) {
+              aiUnitsNearSpawn++;
+            } else if (u.userData.team === enemyTeam) {
+              enemyUnitsNearSpawn++;
+            }
+          });
+        }
+      }
+    }
+    
+    // If AI has 3+ more units than enemy near their spawn, rush it
+    const unitAdvantage = aiUnitsNearSpawn - enemyUnitsNearSpawn;
+    if (unitAdvantage >= 3) {
+      console.log(`${teamId} rushing ${enemyTeam} spawn! Advantage: ${unitAdvantage} (${aiUnitsNearSpawn} vs ${enemyUnitsNearSpawn})`);
+      game.issueMove(units, enemySpawnCell.getCenter());
+      return true;
+    }
+  }
+  
+  return false;
+}
+
+/**
  * Select strategy based on game state
  */
 function selectStrategy(state, gameTime, game, teamId) {
@@ -257,6 +317,7 @@ function executeGroupedStrategy(game, teamId, units) {
 
 /**
  * Split Strategy: Divide units into groups targeting different buff grids
+ * Spreads units across 2-3 grids to avoid clustering
  */
 function executeSplitStrategy(game, teamId, units) {
   const buffGrids = findBuffGrids(game.terrain);
@@ -264,8 +325,13 @@ function executeSplitStrategy(game, teamId, units) {
   
   if (uncapturedBuffs.length === 0) return;
   
-  // Determine number of groups (2-3 based on unit count)
-  const numGroups = units.length >= 8 ? 3 : 2;
+  // Determine number of groups (2-3 based on unit count, max 2-3 units per grid)
+  const maxUnitsPerGrid = 3;
+  const numGroups = Math.min(
+    Math.ceil(units.length / maxUnitsPerGrid),
+    uncapturedBuffs.length,
+    3 // Maximum 3 groups
+  );
   const groupSize = Math.ceil(units.length / numGroups);
   
   // Find closest buff grids for each group
@@ -311,7 +377,7 @@ function executeSplitStrategy(game, teamId, units) {
 }
 
 /**
- * Spawn Rush Strategy: Send 3+ units to enemy spawn, rest capture buffs
+ * Spawn Rush Strategy: Send units to enemy spawns when we have advantage
  */
 function executeSpawnRushStrategy(game, teamId, units) {
   const TEAM_BASES = {
@@ -320,30 +386,62 @@ function executeSpawnRushStrategy(game, teamId, units) {
     team3: { startRow: 13, startCol: 2 },
   };
   
-  // Find enemy spawn (prioritize player team2)
-  const enemyTeam = 'team2';
-  const enemyBase = TEAM_BASES[enemyTeam];
+  // Find all enemy teams
+  const allTeams = ['team1', 'team2', 'team3'];
+  const enemyTeams = allTeams.filter(t => t !== teamId);
   
-  if (!enemyBase || units.length < 3) {
-    // Not enough units, fall back to grouped
-    executeGroupedStrategy(game, teamId, units);
-    return;
+  // Check which enemy spawn is most vulnerable
+  let bestTarget = null;
+  let bestAdvantage = 2; // Need at least 3+ advantage
+  
+  for (const enemyTeam of enemyTeams) {
+    const enemyBase = TEAM_BASES[enemyTeam];
+    if (!enemyBase) continue;
+    
+    const enemySpawnCell = game.terrain.getCell(enemyBase.startRow, enemyBase.startCol);
+    if (!enemySpawnCell) continue;
+    
+    // Count nearby units (within 4 cells)
+    const checkRadius = 4;
+    let friendlyCount = 0;
+    let enemyCount = 0;
+    
+    for (let dr = -checkRadius; dr <= checkRadius; dr++) {
+      for (let dc = -checkRadius; dc <= checkRadius; dc++) {
+        const cell = game.terrain.getCell(enemyBase.startRow + dr, enemyBase.startCol + dc);
+        if (cell && cell.units) {
+          cell.units.forEach(u => {
+            if (!u || !u.userData || !u.userData.team) return;
+            if (u.userData.team === teamId) friendlyCount++;
+            else if (u.userData.team === enemyTeam) enemyCount++;
+          });
+        }
+      }
+    }
+    
+    const advantage = friendlyCount - enemyCount;
+    if (advantage > bestAdvantage) {
+      bestAdvantage = advantage;
+      bestTarget = { team: enemyTeam, cell: enemySpawnCell };
+    }
   }
   
-  const enemySpawn = game.terrain.getCell(enemyBase.startRow, enemyBase.startCol);
-  if (!enemySpawn) return;
-  
-  // Send 3-5 units to enemy spawn
-  const rushCount = Math.min(5, Math.ceil(units.length * 0.3));
-  const rushUnits = units.slice(0, rushCount);
-  const remainingUnits = units.slice(rushCount);
-  
-  // Rush units attack spawn
-  game.issueMove(rushUnits, enemySpawn.getCenter());
-  
-  // Remaining units continue capturing buffs
-  if (remainingUnits.length > 0) {
-    executeGroupedStrategy(game, teamId, remainingUnits);
+  if (bestTarget && units.length >= 3) {
+    // Send 50% of units to attack spawn
+    const rushCount = Math.max(3, Math.ceil(units.length * 0.5));
+    const rushUnits = units.slice(0, rushCount);
+    const remainingUnits = units.slice(rushCount);
+    
+    console.log(`${teamId} executing spawn rush on ${bestTarget.team} with ${rushCount} units (advantage: ${bestAdvantage})`);
+    game.issueMove(rushUnits, bestTarget.cell.getCenter());
+    
+    // Remaining units capture buffs with spread strategy
+    if (remainingUnits.length > 0) {
+      executeSplitStrategy(game, teamId, remainingUnits);
+    }
+  } else {
+    // No good target, fall back to split strategy
+    executeSplitStrategy(game, teamId, units);
   }
 }
 

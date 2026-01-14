@@ -2,6 +2,7 @@ import { computePath, stepAlongPath } from './pathfinding.js';
 import { runAI } from './ai.js';
 import { GridCollisionSystem } from './collision.js';
 import { spawnUnitAtBase, TEAM_BASES, updateHealthBarVisual } from './units.js';
+import { showEliminationMessage } from './ui.js';
 
 export class GameLogic {
   constructor(scene, terrain) {
@@ -9,27 +10,65 @@ export class GameLogic {
     this.terrain = terrain;
     this.zones = terrain.zones || [];
     this.teams = terrain.teams || {};
-    this.scores = { player: 0, ai1: 0, ai2: 0 };
+    this.buffScores = { team1: 0, team2: 0, team3: 0 }; // Buff grid count
     this.unitPaths = new Map();
     this.collisionSystem = new GridCollisionSystem(scene, terrain);
+    this.gamePaused = false; // Game state flag
 
     // Periodic spawning of new units from each team's base
-    this.baseSpawnInterval = 10; // seconds (default)
-    this.buffedSpawnInterval = 9; // seconds (when buff is active)
-    this.spawnInterval = this.baseSpawnInterval;
-    this.spawnTimer = 0;
+    this.baseSpawnInterval = 20; // seconds (default)
+    this.teamSpawnTimers = {}; // Per-team spawn timers
+    Object.keys(TEAM_BASES).forEach(teamId => {
+      this.teamSpawnTimers[teamId] = 0;
+    });
 
     // Buff grid tracking
     this.buffGrids = terrain.buffGrids || [];
+    console.log('[GameLogic] Constructor - buffGrids count:', this.buffGrids.length);
+    console.log('[GameLogic] Constructor - buffGrids:', this.buffGrids.map(c => ({ row: c.row, col: c.col, type: c.type, owner: c.owner })));
     // Track how long each unit has been on a buff grid: Map<unitUuid, { cell, time }>
     this.unitBuffTimers = new Map();
     this.buffActivationTime = 10; // seconds to activate buff
     this.spawnSpeedBuffActive = false; // Global buff state
+    
+    // Spawn grid capture tracking: Map<teamId, { enemyTeam, count, time }>
+    this.spawnGridCapture = new Map();
+    this.spawnGridCaptureTime = 8; // 8 seconds to eliminate team
+    this.spawnGridCaptureThreshold = 3; // 3+ enemy units required
+    this.eliminatedTeams = new Set(); // Track eliminated teams
+    
+    // Track game start time for victory timer
+    this.gameStartTime = Date.now();
+    
+    // Color spawn grids with team colors
+    this.colorSpawnGrids();
+
+    // Initialize buff grid scores
+    this.updateBuffScores();
   }
 
   setSceneEntities({ zones, teams }) {
     this.zones = zones;
     this.teams = teams;
+  }
+
+  /**
+   * Color spawn grids with team colors
+   */
+  colorSpawnGrids() {
+    const TEAM_COLORS = {
+      team1: 0x7c3aed, // Purple (player)
+      team2: 0x22c55e, // Green
+      team3: 0xfacc15, // Yellow
+    };
+    
+    Object.entries(TEAM_BASES).forEach(([teamId, base]) => {
+      const spawnCell = this.terrain.getCell(base.startRow, base.startCol);
+      if (spawnCell && spawnCell.mesh && TEAM_COLORS[teamId]) {
+        spawnCell.mesh.material.color.setHex(TEAM_COLORS[teamId]);
+        spawnCell.owner = teamId; // Mark spawn grid as owned by team
+      }
+    });
   }
 
   issueMove(units, target) {
@@ -82,6 +121,11 @@ export class GameLogic {
   }
 
   update(dt) {
+    // Skip update if game is over
+    if (this.gamePaused) {
+      return;
+    }
+    
     // Move units along paths FIRST
     // Process all units from all teams
     const allUnits = Object.values(this.teams).flat();
@@ -114,38 +158,313 @@ export class GameLogic {
     // Update buff grid interactions
     this.updateBuffGrids(dt);
 
-    // Periodically spawn new units at each team's base
-    // Use buffed spawn interval if buff is active
-    this.spawnInterval = this.spawnSpeedBuffActive ? this.buffedSpawnInterval : this.baseSpawnInterval;
-    this.spawnTimer += dt;
-    if (this.spawnTimer >= this.spawnInterval) {
-      this.spawnTimer = 0;
+    // Recompute buff-grid scoreboard (drives bottom-right HUD)
+    this.updateBuffScores();
+    
+    // Check spawn grid captures for team elimination
+    this.updateSpawnGridCapture(dt);
 
-      Object.keys(TEAM_BASES).forEach((teamId) => {
-        // Check if friendly units are on spawn grid for faster spawning
-        const base = TEAM_BASES[teamId];
-        const spawnCell = this.terrain.getCell(base.startRow, base.startCol);
-        const hasFriendlyOnSpawn = spawnCell && spawnCell.units.some(u => u.userData.team === teamId);
+    // Periodically spawn new units at each team's base
+    // Use dynamic spawn interval based on captured buff grids
+    Object.keys(TEAM_BASES).forEach((teamId) => {
+      // Skip eliminated teams
+      if (this.eliminatedTeams.has(teamId)) return;
+      
+      // Increment this team's spawn timer
+      this.teamSpawnTimers[teamId] += dt;
+      
+      // Count buff grids owned by this team
+      const buffGridsOwned = this.buffGrids.filter(cell => cell.owner === teamId).length;
+      const spawnReduction = buffGridsOwned * 0.5; // 0.5 seconds per buff grid
+      const teamSpawnInterval = Math.max(1, this.baseSpawnInterval - spawnReduction); // Minimum 1 second
+      
+      if (this.teamSpawnTimers[teamId] >= teamSpawnInterval) {
+        // Reset this team's timer
+        this.teamSpawnTimers[teamId] = 0;
         
-        // Spawn additional unit if friendly units are on spawn
-        const spawnCount = hasFriendlyOnSpawn ? 2 : 1;
+        // Spawn 1 unit
+        const unit = spawnUnitAtBase(this.scene, this.terrain, teamId, buffGridsOwned);
+        if (unit) {
+          if (!this.teams[teamId]) this.teams[teamId] = [];
+          this.teams[teamId].push(unit);
+        }
+      }
+    });
+  }
+
+  /**
+   * Check if enemy units are capturing spawn grids and eliminate teams after 8 seconds
+   */
+  updateSpawnGridCapture(dt) {
+    // Check each team's spawn grid
+    Object.keys(TEAM_BASES).forEach((defendingTeam) => {
+      // Skip already eliminated teams
+      if (this.eliminatedTeams.has(defendingTeam)) return;
+      
+      const base = TEAM_BASES[defendingTeam];
+      const spawnCell = this.terrain.getCell(base.startRow, base.startCol);
+      
+      if (!spawnCell || !spawnCell.units) return;
+      
+      // Count enemy units on this spawn grid
+      const enemyUnits = new Map(); // Map<enemyTeam, count>
+      spawnCell.units.forEach(unit => {
+        // Skip if unit doesn't have proper data
+        if (!unit || !unit.userData || !unit.userData.team) return;
         
-        for (let i = 0; i < spawnCount; i++) {
-          const unit = spawnUnitAtBase(this.scene, this.terrain, teamId);
-          if (unit) {
-            if (!this.teams[teamId]) this.teams[teamId] = [];
-            this.teams[teamId].push(unit);
-          }
+        const unitTeam = unit.userData.team;
+        const unitLogicalData = unit.userData.unit;
+        
+        console.log(`[DEBUG Spawn ${defendingTeam}] Unit team: ${unitTeam}, defending: ${defendingTeam}, isDead: ${unitLogicalData?.isDead}`);
+        
+        // Only count living enemy units
+        if (unitTeam !== defendingTeam && 
+            !this.eliminatedTeams.has(unitTeam) &&
+            unitLogicalData &&
+            !unitLogicalData.isDead) {
+          enemyUnits.set(unitTeam, (enemyUnits.get(unitTeam) || 0) + 1);
         }
       });
+      
+      console.log(`[DEBUG Spawn ${defendingTeam}] Enemy units:`, Array.from(enemyUnits.entries()));
+      
+      // Find enemy team with most units
+      let maxEnemyTeam = null;
+      let maxEnemyCount = 0;
+      enemyUnits.forEach((count, enemyTeam) => {
+        if (count > maxEnemyCount) {
+          maxEnemyCount = count;
+          maxEnemyTeam = enemyTeam;
+        }
+      });
+      
+      // Check if threshold is met (3+ enemy units)
+      if (maxEnemyCount >= this.spawnGridCaptureThreshold) {
+        const captureKey = `${defendingTeam}`;
+        const existing = this.spawnGridCapture.get(captureKey);
+        
+        if (existing && existing.enemyTeam === maxEnemyTeam) {
+          // Same enemy team, increment timer
+          existing.time += dt;
+          
+          // Log progress every second
+          if (Math.floor(existing.time) > Math.floor(existing.time - dt)) {
+            const timeLeft = this.spawnGridCaptureTime - existing.time;
+            console.log(`${maxEnemyTeam} capturing ${defendingTeam} spawn: ${timeLeft.toFixed(1)}s remaining (${maxEnemyCount} units)`);
+          }
+          
+          // Eliminate team if threshold reached
+          if (existing.time >= this.spawnGridCaptureTime) {
+            console.log(`[ELIMINATION] ${defendingTeam} being eliminated by ${maxEnemyTeam}`);
+            this.eliminateTeam(defendingTeam, maxEnemyTeam);
+            this.spawnGridCapture.delete(captureKey);
+          }
+        } else {
+          // New capture attempt or different enemy
+          console.log(`${maxEnemyTeam} starting to capture ${defendingTeam} spawn with ${maxEnemyCount} units`);
+          this.spawnGridCapture.set(captureKey, {
+            enemyTeam: maxEnemyTeam,
+            count: maxEnemyCount,
+            time: dt
+          });
+        }
+      } else {
+        // Not enough enemies, reset capture
+        this.spawnGridCapture.delete(`${defendingTeam}`);
+      }
+    });
+  }
+
+  /**
+   * Eliminate a team and transfer all their buff grids to the conquering team
+   */
+  eliminateTeam(eliminatedTeam, conqueringTeam) {
+    console.log(`[DEBUG eliminateTeam] eliminatedTeam: "${eliminatedTeam}", conqueringTeam: "${conqueringTeam}"`);
+    console.log(`[DEBUG eliminateTeam] eliminatedTeam === 'team2': ${eliminatedTeam === 'team2'}`);
+    
+    const teamNames = {
+      team1: 'Camel Team',
+      team2: 'Player',
+      team3: 'Ant Team'
+    };
+    
+    const eliminatedName = teamNames[eliminatedTeam] || eliminatedTeam;
+    const conqueringName = teamNames[conqueringTeam] || conqueringTeam;
+    
+    console.log(`${conqueringName} has eliminated ${eliminatedName}!`);
+    
+    // Show elimination message on screen
+    showEliminationMessage(`${eliminatedName} has been ELIMINATED by ${conqueringName}!`);
+    
+    // Mark team as eliminated
+    this.eliminatedTeams.add(eliminatedTeam);
+    
+    // Check for game over or victory
+    if (eliminatedTeam === 'team2') {
+      // Player lost (team2 is the player - cobras/snakes)
+      console.log('[DEBUG] Player (team2) lost - triggering game over');
+      this.triggerGameOver();
+      return;
+    } else {
+      console.log('[DEBUG] AI team eliminated, checking for victory');
+    }
+    
+    // Check if all AI teams are eliminated (victory)
+    const aiTeams = ['team1', 'team3']; // Camel and Ant teams
+    const allAIsEliminated = aiTeams.every(team => this.eliminatedTeams.has(team));
+    if (allAIsEliminated) {
+      console.log('[DEBUG] All AI teams eliminated - triggering victory');
+      this.triggerVictory();
+      return;
+    }
+    
+    // Transfer all buff grids owned by eliminated team to conquering team
+    const TEAM_COLORS = {
+      team1: 0x7c3aed, // Purple
+      team2: 0x22c55e, // Green
+      team3: 0xfacc15, // Yellow
+    };
+    
+    let transferredCount = 0;
+    this.buffGrids.forEach(cell => {
+      if (cell.owner === eliminatedTeam) {
+        cell.owner = conqueringTeam;
+        if (cell.mesh && TEAM_COLORS[conqueringTeam]) {
+          cell.mesh.material.color.setHex(TEAM_COLORS[conqueringTeam]);
+        }
+        transferredCount++;
+      }
+    });
+    
+    if (transferredCount > 0) {
+      console.log(`${conqueringTeam} captured ${transferredCount} buff grids from ${eliminatedTeam}`);
+    }
+    
+    // Change spawn grid color to conquering team
+    const eliminatedBase = TEAM_BASES[eliminatedTeam];
+    if (eliminatedBase) {
+      const spawnCell = this.terrain.getCell(eliminatedBase.startRow, eliminatedBase.startCol);
+      if (spawnCell && spawnCell.mesh && TEAM_COLORS[conqueringTeam]) {
+        spawnCell.mesh.material.color.setHex(TEAM_COLORS[conqueringTeam]);
+        spawnCell.owner = conqueringTeam;
+      }
+    }
+    
+    // Remove all units from eliminated team
+    if (this.teams[eliminatedTeam]) {
+      const units = [...this.teams[eliminatedTeam]];
+      units.forEach(unit => {
+        this._handleUnitDeath(unit);
+      });
+      this.teams[eliminatedTeam] = [];
+    }
+  }
+
+  triggerGameOver() {
+    console.log('GAME OVER - Player has been eliminated!');
+    // Pause the game
+    this.gamePaused = true;
+    // Show game over UI
+    this.showGameEndScreen('GAME OVER', 'You have been eliminated!', '#ff0000');
+  }
+
+  triggerVictory() {
+    console.log('VICTORY - All AI teams eliminated!');
+    // Pause the game
+    this.gamePaused = true;
+    
+    // Calculate time taken
+    const elapsedMs = Date.now() - this.gameStartTime;
+    const elapsedSec = Math.floor(elapsedMs / 1000);
+    const minutes = Math.floor(elapsedSec / 60);
+    const seconds = elapsedSec % 60;
+    const timeString = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+    
+    // Show victory UI with time
+    this.showGameEndScreen('VICTORY!', `You have conquered all enemy spawns!\n\nTime: ${timeString}`, '#00ff00');
+  }
+
+  showGameEndScreen(title, message, color) {
+    // Create overlay
+    const overlay = document.createElement('div');
+    overlay.id = 'gameEndOverlay';
+    overlay.style.position = 'fixed';
+    overlay.style.top = '0';
+    overlay.style.left = '0';
+    overlay.style.width = '100%';
+    overlay.style.height = '100%';
+    overlay.style.backgroundColor = 'rgba(0, 0, 0, 0.8)';
+    overlay.style.display = 'flex';
+    overlay.style.flexDirection = 'column';
+    overlay.style.justifyContent = 'center';
+    overlay.style.alignItems = 'center';
+    overlay.style.zIndex = '20000';
+    overlay.style.animation = 'fadeIn 0.5s ease-in';
+
+    // Title
+    const titleEl = document.createElement('div');
+    titleEl.textContent = title;
+    titleEl.style.fontSize = '64px';
+    titleEl.style.fontWeight = 'bold';
+    titleEl.style.color = color;
+    titleEl.style.textShadow = '2px 2px 4px rgba(0,0,0,0.9)';
+    titleEl.style.marginBottom = '20px';
+    titleEl.style.animation = 'scaleIn 0.5s ease-out';
+
+    // Message
+    const messageEl = document.createElement('div');
+    messageEl.textContent = message;
+    messageEl.style.fontSize = '24px';
+    messageEl.style.color = '#ffffff';
+    messageEl.style.textShadow = '1px 1px 2px rgba(0,0,0,0.8)';
+    messageEl.style.marginBottom = '40px';
+    messageEl.style.whiteSpace = 'pre-line'; // Allow newlines in message
+    messageEl.style.textAlign = 'center';
+
+    // Restart button
+    const restartBtn = document.createElement('button');
+    restartBtn.textContent = 'Restart Game';
+    restartBtn.style.fontSize = '20px';
+    restartBtn.style.padding = '15px 40px';
+    restartBtn.style.backgroundColor = color;
+    restartBtn.style.color = '#ffffff';
+    restartBtn.style.border = 'none';
+    restartBtn.style.borderRadius = '8px';
+    restartBtn.style.cursor = 'pointer';
+    restartBtn.style.fontWeight = 'bold';
+    restartBtn.style.boxShadow = '0 4px 6px rgba(0,0,0,0.3)';
+    restartBtn.style.transition = 'transform 0.2s';
+    restartBtn.onmouseover = () => { restartBtn.style.transform = 'scale(1.05)'; };
+    restartBtn.onmouseout = () => { restartBtn.style.transform = 'scale(1)'; };
+    restartBtn.onclick = () => { window.location.reload(); };
+
+    overlay.appendChild(titleEl);
+    overlay.appendChild(messageEl);
+    overlay.appendChild(restartBtn);
+
+    // Add animations if not present
+    if (!document.getElementById('gameEndAnimations')) {
+      const style = document.createElement('style');
+      style.id = 'gameEndAnimations';
+      style.textContent = `
+        @keyframes fadeIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+        @keyframes scaleIn {
+          from { transform: scale(0.5); opacity: 0; }
+          to { transform: scale(1); opacity: 1; }
+        }
+      `;
+      document.head.appendChild(style);
     }
 
-    // Zone control + scoring
-    this.updateZones(dt);
+    document.body.appendChild(overlay);
   }
 
   /**
    * Track units standing on buff grids and activate spawn speed buff after 10 seconds
+   * Multiple units on the same grid capture faster (1.3x per additional unit)
    */
   updateBuffGrids(dt) {
     // Get all units from all teams
@@ -154,24 +473,44 @@ export class GameLogic {
     // Track which units are currently on buff grids
     const unitsOnBuffGrids = new Map();
     
+    // Count units per grid cell (for capture multiplier)
+    const unitsPerCell = new Map(); // Map<cell, Map<team, count>>
+    
     allUnits.forEach(unit => {
       const cell = this.terrain.getCellFromWorldPos(unit.position.x, unit.position.z);
       if (cell && cell.type === 'buff') {
-        unitsOnBuffGrids.set(unit.uuid, { cell, team: unit.userData.team });
+        const team = unit.userData.team;
+        unitsOnBuffGrids.set(unit.uuid, { cell, team });
+        
+        // Count units per cell per team
+        if (!unitsPerCell.has(cell)) {
+          unitsPerCell.set(cell, new Map());
+        }
+        const teamCounts = unitsPerCell.get(cell);
+        teamCounts.set(team, (teamCounts.get(team) || 0) + 1);
       }
     });
     
     // Update timers for units on buff grids
     unitsOnBuffGrids.forEach(({ cell, team }, unitUuid) => {
       const existing = this.unitBuffTimers.get(unitUuid);
+      
+      // Calculate capture speed multiplier based on unit count
+      // 1 unit = 1.0x, 2 units = 1.15x, 3 units = 1.3x, 4 units = 1.45x, etc.
+      const teamCounts = unitsPerCell.get(cell);
+      const unitCount = teamCounts ? (teamCounts.get(team) || 1) : 1;
+      const captureMultiplier = 1.0 + ((unitCount - 1) * 0.15);
+      const adjustedDt = dt * captureMultiplier;
+      
       if (existing && existing.cell === cell) {
-        // Same cell, increment timer
-        existing.time += dt;
+        // Same cell, increment timer with multiplier
+        existing.time += adjustedDt;
         
         // Capture buff grid if timer reaches threshold
         if (existing.time >= this.buffActivationTime) {
           // Change buff grid color to team color and mark as owned
           if (cell.owner !== team) {
+            console.log(`[updateBuffGrids] CAPTURING buff grid at ${cell.row},${cell.col} for ${team} (${unitCount} units, ${captureMultiplier.toFixed(1)}x speed)`);
             cell.owner = team;
             const TEAM_COLORS = {
               team1: 0x7c3aed, // Purple
@@ -181,17 +520,14 @@ export class GameLogic {
             if (cell.mesh && TEAM_COLORS[team]) {
               cell.mesh.material.color.setHex(TEAM_COLORS[team]);
             }
-            console.log(`${team} captured a buff grid!`);
-          }
-          
-          if (!this.spawnSpeedBuffActive) {
-            this.spawnSpeedBuffActive = true;
-            console.log('Spawn speed buff activated! Spawn time reduced from 10s to 9s');
+            const buffCount = this.buffGrids.filter(c => c.owner === team).length;
+            const newSpawnTime = Math.max(1, this.baseSpawnInterval - (buffCount * 0.5));
+            console.log(`${team} captured a buff grid! (Total: ${buffCount}) Spawn time: ${newSpawnTime}s`);
           }
         }
       } else {
-        // New cell or different cell, start timer
-        this.unitBuffTimers.set(unitUuid, { cell, time: dt, team });
+        // New cell or different cell, start timer with multiplier
+        this.unitBuffTimers.set(unitUuid, { cell, time: adjustedDt, team });
       }
     });
     
@@ -290,26 +626,25 @@ export class GameLogic {
     unit.userData._attackTarget = null;
   }
 
-  updateZones(dt) {
-    if (!this.zones) return;
-    this.zones.forEach(zone => {
-      const radius = 1.0;
-      const counts = { player: 0, ai1: 0, ai2: 0 };
-      Object.entries(this.teams).forEach(([teamId, units]) => {
-        units.forEach(u => {
-          if (u.position.distanceTo(zone.position) < radius) counts[teamId] += 1;
-        });
-      });
-      const maxTeam = Object.entries(counts).sort((a, b) => b[1] - a[1])[0];
-      if (maxTeam[1] > 0) {
-        zone.userData.owner = maxTeam[0];
-        zone.material.color.setHex(maxTeam[0] === 'player' ? 0x7c3aed : maxTeam[0] === 'ai1' ? 0x22c55e : 0xfacc15);
-        this.scores[maxTeam[0]] += dt;
-      } else {
-        zone.userData.owner = null;
-        zone.material.color.setHex(0xffffff);
+  /**
+   * Update buff grid scores
+   */
+  updateBuffScores() {
+    this.buffScores = { team1: 0, team2: 0, team3: 0 };
+    
+    console.log('[updateBuffScores] Total buffGrids:', this.buffGrids.length);
+    const ownedGrids = this.buffGrids.filter(c => c.owner);
+    console.log('[updateBuffScores] Owned buffGrids:', ownedGrids.length);
+    console.log('[updateBuffScores] Owners:', ownedGrids.map(c => ({ row: c.row, col: c.col, owner: c.owner })));
+    
+    // Count buff grids owned by each team
+    this.buffGrids.forEach(cell => {
+      if (cell.owner) {
+        this.buffScores[cell.owner] = (this.buffScores[cell.owner] || 0) + 1;
       }
     });
+    
+    console.log('[updateBuffScores] Final scores:', this.buffScores);
   }
 }
 

@@ -39,10 +39,21 @@ export class Unit {
    * Recompute the Box3 collider so it tightly wraps the rendered object
    * (including children and current transforms), using setFromObject as
    * recommended by MDN.
+   * Scale the collider down to 50% to reduce collision size
    */
   updateCollider() {
     if (!this.object) return;
     this.collider.setFromObject(this.object);
+    
+    // Scale down the collision box to 48% to maintain spacing
+    const center = this.collider.getCenter(new THREE.Vector3());
+    const size = this.collider.getSize(new THREE.Vector3());
+    
+    // Apply 0.48 scale factor for better unit spacing
+    const scaleFactor = 0.48;
+    const newSize = size.multiplyScalar(scaleFactor);
+    
+    this.collider.setFromCenterAndSize(center, newSize);
   }
 
   /**

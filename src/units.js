@@ -1161,7 +1161,7 @@ function findValidSpawnCell(scene, terrain, baseRow, baseCol, geometry) {
  * Spawn a single unit at a team's base cell (no offsets), used for periodic spawning.
  * Checks for collisions and tries to spawn in an adjacent cell if occupied.
  */
-export function spawnUnitAtBase(scene, terrain, teamId) {
+export function spawnUnitAtBase(scene, terrain, teamId, buffGridsOwned = 0) {
   const base = TEAM_BASES[teamId];
   if (!base) return null;
 
@@ -1175,12 +1175,14 @@ export function spawnUnitAtBase(scene, terrain, teamId) {
 
   const visual = geometry.create(color);
 
-  // Attach logical Unit data
+  // Attach logical Unit data with slight buff per captured grid (2% per grid)
+  const healthBuff = 1 + (buffGridsOwned * 0.02);
+  const speedBuff = 1 + (buffGridsOwned * 0.02);
   const unitData = new Unit({
-    maxHealth: 100,
+    maxHealth: Math.floor(100 * healthBuff),
     team: teamId,
     type: geometry.type,
-    speed: 2.0,
+    speed: 2.0 * speedBuff,
   });
   unitData.bindObject(visual);
 

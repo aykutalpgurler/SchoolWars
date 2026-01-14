@@ -12,6 +12,18 @@ export class GridCollisionSystem {
     this.unitBaseHeight = 0.25; // Base height offset for units
     this.cellSize = terrain.CELL_SIZE || 1.0;
     
+    // Calculate terrain bounds for failsafe
+    const gridSize = terrain.GRID_SIZE || 16;
+    const halfSize = (gridSize * this.cellSize) / 2;
+    // Use smaller margin (0.2 instead of 0.5) and account for cell size
+    // to allow units to reach edge cells without being clamped away
+    this.bounds = {
+      minX: -halfSize + this.cellSize / 2 + 0.2,
+      maxX: halfSize - this.cellSize / 2 - 0.2,
+      minZ: -halfSize + this.cellSize / 2 + 0.2,
+      maxZ: halfSize - this.cellSize / 2 - 0.2
+    };
+    
     // Raycaster for finding terrain surface height
     this.raycaster = new THREE.Raycaster();
     this.raycaster.firstHitOnly = true; // Optimize: only need first hit
@@ -118,6 +130,12 @@ export class GridCollisionSystem {
       }
     });
 
+    // Clamp units to bounds BEFORE collision resolution
+    // This prevents collisions from pushing units out of bounds
+    allUnits.forEach(unit => {
+      this.clampToBounds(unit);
+    });
+
     // Then, resolve simple box-vs-box collisions between units using their Box3
     this._resolveUnitCollisions(allUnits);
   }
@@ -192,10 +210,21 @@ export class GridCollisionSystem {
         this._tmpVec.y = 0;
         this._tmpVec.normalize();
 
-        const pushDistance = 0.05;
+        // Very small push to prevent launching but ensure separation
+        const pushDistance = 0.01;
         a.position.addScaledVector(this._tmpVec, pushDistance * 0.5);
         b.position.addScaledVector(this._tmpVec, -pushDistance * 0.5);
       }
     }
+  }
+
+  /**
+   * Clamp unit position to terrain bounds (failsafe to prevent out-of-bounds)
+   * Very lightweight - just 4 comparisons per unit
+   */
+  clampToBounds(unitMesh) {
+    const pos = unitMesh.position;
+    pos.x = Math.max(this.bounds.minX, Math.min(this.bounds.maxX, pos.x));
+    pos.z = Math.max(this.bounds.minZ, Math.min(this.bounds.maxZ, pos.z));
   }
 }

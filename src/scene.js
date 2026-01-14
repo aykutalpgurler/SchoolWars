@@ -57,6 +57,8 @@ export async function buildSceneContent(scene) {
 
   // Create buff grids (5-8 blue cells)
   const buffGrids = createBuffGrids(terrain);
+  console.log('[buildSceneContent] Created', buffGrids.length, 'buff grids');
+  console.log('[buildSceneContent] Buff grids:', buffGrids.map(c => ({ row: c.row, col: c.col, type: c.type })));
 
   // Spawn placeholder team units (now async to load camel model)
   const teams = await spawnTeams(scene, terrain);

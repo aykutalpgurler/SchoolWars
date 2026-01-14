@@ -5,6 +5,7 @@ import { setupLights } from './lightController.js';
 import { buildSceneContent } from './scene.js';
 import { GameLogic } from './gameLogic.js';
 import { setupInput } from './input.js';
+import { createUI } from './ui.js';
 
 const appEl = document.getElementById('app');
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -30,7 +31,7 @@ const cameraController = setupCameraController(camera, renderer.domElement);
 const { directional, spotlight, spotlightTarget, spotlightUniforms } = setupLights(scene);
 
 // Initialize scene content asynchronously (to load camel model)
-let terrain, teams, game, input;
+let terrain, teams, game, input, ui;
 
 (async () => {
   const sceneContent = await buildSceneContent(scene);
@@ -41,6 +42,15 @@ let terrain, teams, game, input;
   // Setup game logic
   game = new GameLogic(scene, terrain);
   game.setSceneEntities({ teams });
+
+  // Setup UI
+  ui = createUI(game, {
+    scene,
+    directional,
+    spotlight,
+    spotlightTarget,
+    terrain
+  });
 
   // Setup input
   input = setupInput({
@@ -91,6 +101,11 @@ function animate() {
   // Only render if game is initialized
   if (game) {
     game.update(dt);
+  }
+
+  // Update UI (scoreboard, etc)
+  if (ui) {
+    ui.update(dt);
   }
 
   // Update debug info if unit is selected
