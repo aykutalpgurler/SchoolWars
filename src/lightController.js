@@ -25,9 +25,9 @@ export function setupLights(scene) {
   scene.add(fillLight);
 
   // User-controllable spotlight with 6 DOF
-  const spotlight = new THREE.SpotLight(0xffffff, 20.0); // Start with intensity 20.0 (enabled)
+  const spotlight = new THREE.SpotLight(0xffffff, 50.0); // Start with intensity 50.0 (enabled)
   spotlight.position.set(-1.0, 19.8, -1.0);
-  spotlight.angle = THREE.MathUtils.degToRad(45); // 45 degrees
+  spotlight.angle = THREE.MathUtils.degToRad(60); // 60 degrees
   spotlight.penumbra = 0.20;
   spotlight.decay = 1.0;
   spotlight.distance = 37;
