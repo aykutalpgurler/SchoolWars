@@ -162,7 +162,7 @@ function animate() {
     const buffScoreText = document.getElementById('buffScoreText');
     if (buffScoreText) {
       const scores = getBuffGridScores(terrain);
-      buffScoreText.textContent = `Player: ${scores.team2 || 0} | AI1: ${scores.team1 || 0} | AI2: ${scores.team3 || 0}`;
+      buffScoreText.textContent = `Humanoids: ${scores.team2 || 0} | Animals: ${scores.team1 || 0} | Insects: ${scores.team3 || 0}`;
     }
   }
 
