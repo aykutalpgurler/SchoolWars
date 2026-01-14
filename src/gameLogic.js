@@ -282,9 +282,9 @@ export class GameLogic {
     console.log(`[DEBUG eliminateTeam] eliminatedTeam === 'team2': ${eliminatedTeam === 'team2'}`);
     
     const teamNames = {
-      team1: 'Camel Team',
+      team1: 'Animals',
       team2: 'Player',
-      team3: 'Ant Team'
+      team3: 'Insects'
     };
     
     const eliminatedName = teamNames[eliminatedTeam] || eliminatedTeam;

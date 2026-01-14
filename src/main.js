@@ -7,6 +7,7 @@ import { GameLogic } from './gameLogic.js';
 import { setupInput } from './input.js';
 import { initializeShaderController, setShaderMode, cycleShaderMode, getShaderMode, resizeShaderController, updateCelToonParams, updateChromaticAberrationParams, SHADER_MODES } from './shaderController.js';
 import { getBuffGridScores } from './score.js';
+import { CreditsSystem } from './credits.js';
 
 const appEl = document.getElementById('app');
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -33,7 +34,7 @@ const cameraController = setupCameraController(camera, renderer.domElement);
 const { hemi, directional, fillLight, spotlight, spotlightTarget, updateSpotlightRotation, setSpotlightDebugMode, getSpotlightDebugMode, toggleSpotlightHelpers, updateSpotlightHelpers } = setupLights(scene);
 
 // Initialize scene content asynchronously (to load camel model)
-let terrain, teams, game, input;
+let terrain, teams, game, input, creditsSystem;
 let composer = null;
 
 (async () => {
@@ -84,8 +85,21 @@ let composer = null;
   diagnoseLighting(scene);
   ensureShadowsOnTerrain(terrain);
 
+  // Initialize credits system
+  creditsSystem = new CreditsSystem(scene, camera, cameraController);
+
+  // Add keyboard shortcut for credits (C key)
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'c' || e.key === 'C') {
+      e.preventDefault();
+      creditsSystem.toggle().catch(err => {
+        console.error('[Main] Credits error:', err);
+      });
+    }
+  });
+
   // Expose for debug in console (store controls globally for animate loop access)
-  window.__schoolwars = { scene, camera, renderer, terrain, composer, spotlight, spotlightPanelControls };
+  window.__schoolwars = { scene, camera, renderer, terrain, composer, spotlight, spotlightPanelControls, creditsSystem };
 })();
 
 window.addEventListener('resize', () => {
@@ -105,7 +119,9 @@ function animate() {
   const dt = (now - lastTime) / 1000;
   lastTime = now;
 
-  cameraController.update(dt);
+  if (!creditsSystem || !creditsSystem.isShowingCredits) {
+    cameraController.update(dt);
+  }
 
   // Day/night cycle for polish (only if not in spotlight debug mode and user hasn't manually changed lights)
   // Check if user has manually modified lights (stored in global flag)
@@ -162,7 +178,7 @@ function animate() {
     const buffScoreText = document.getElementById('buffScoreText');
     if (buffScoreText) {
       const scores = getBuffGridScores(terrain);
-      buffScoreText.textContent = `Player: ${scores.team2 || 0} | AI1: ${scores.team1 || 0} | AI2: ${scores.team3 || 0}`;
+      buffScoreText.textContent = `Humanoids: ${scores.team2 || 0} | Animals: ${scores.team1 || 0} | Insects: ${scores.team3 || 0}`;
     }
   }
 
