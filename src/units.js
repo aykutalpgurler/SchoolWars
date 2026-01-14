@@ -17,6 +17,27 @@ const TEAM_MODEL_POOLS = {
   team3: ['Ant', 'Grasshopper', 'Beetle'], // Ant team (triangle/yellow)
 };
 
+// Health bar height from ground for each model (adjust these values as needed)
+const MODEL_HEALTHBAR_HEIGHTS = {
+  // Team 1 models (Camel team - larger)
+  'Camel': 9.0,
+  'Cat': 22.0,
+  'Fox': 4,
+  
+  // Team 2 models (Player team - medium)
+  'Alien': 18.0,
+  'Archer': 14.0,
+  'Astronaut': 5.0,
+  
+  // Team 3 models (Ant team - smaller)
+  'Ant': 2,
+  'Grasshopper': 30.0,
+  'Beetle': 30.0,
+  
+  // Fallback
+  'default': 2.0,
+};
+
 // Cache for loaded models
 let camelModelCache = null;
 let catModelCache = null;
@@ -289,6 +310,9 @@ function makeCubeUnit(color) {
 
   // Clone the cached model (deep clone to clone materials and textures)
   const unit = modelCache.clone(true);
+  
+  // Store model name for health bar positioning
+  unit.userData.modelName = modelName;
 
   // Calculate bounding box to determine size for collision helper
   const box = new THREE.Box3().setFromObject(unit);
@@ -581,6 +605,9 @@ function makeTriangleUnit(color) {
 
   // Clone the cached model (deep clone to clone materials and textures)
   const unit = modelCache.clone(true);
+  
+  // Store model name for health bar positioning
+  unit.userData.modelName = modelName;
 
   // Apply team color as a very subtle tint while preserving dark appearance
   unit.traverse((child) => {
@@ -1471,6 +1498,12 @@ function makeSphereUnit(color) {
 
   // Clone the cached model (deep clone to clone materials and textures)
   const unit = modelCache.clone(true);
+  
+  // Store model name for health bar positioning
+  unit.userData.modelName = modelName;
+  
+  // Store model name for health bar positioning
+  unit.userData.modelName = modelName;
 
   // Apply team color as a very subtle tint while preserving material properties
   unit.traverse((child) => {
@@ -1645,21 +1678,25 @@ function attachHealthBar(visual, unitData) {
   }
 
   // Use fixed dimensions for all units - same size regardless of model
-  let barHeight = 2.0; // Fixed vertical position
+  let barHeight = 2.0; // Default vertical position
 
-
-
-  // Add additional height offset for specific unit types
-  if (unitData.type === 'sphere') { // Camel
-    barHeight = 9; // Move health bar higher for camel
+  // Get model name from visual's userData and look up health bar height
+  const modelName = visual.userData.modelName;
+  if (modelName && MODEL_HEALTHBAR_HEIGHTS[modelName]) {
+    barHeight = MODEL_HEALTHBAR_HEIGHTS[modelName];
+  } else if (MODEL_HEALTHBAR_HEIGHTS[unitData.type]) {
+    // Fallback to geometry type if model name not found
+    barHeight = MODEL_HEALTHBAR_HEIGHTS[unitData.type];
+  } else {
+    // Final fallback based on old logic
+    if (unitData.type === 'sphere') {
+      barHeight = 9;
+    } else if (unitData.type === 'cube') {
+      barHeight = 7;
+    } else if (unitData.type === 'triangle') {
+      barHeight = 5;
+    }
   }
-
-  if (unitData.type === 'cube') { // Cobra
-    barHeight = 7; // Move health bar higher for cobra
-  }
-
-
-
 
   barGroup.position.set(0, barHeight, 0);
 
